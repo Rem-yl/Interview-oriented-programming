@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"net"
+	"os"
 	logger "sockect-demo/logger"
+	"strings"
 )
 
 func main() {
@@ -15,4 +19,17 @@ func main() {
 	}
 
 	defer conn.Close()
+
+	scanner := bufio.NewScanner(os.Stdin)
+	fmt.Print(">>> ")
+
+	for scanner.Scan() {
+		text := strings.ToLower(scanner.Text())
+		logger.Info("CMD: ", text)
+
+		if _, err := conn.Write([]byte(text + "\n")); err != nil {
+			logger.Errorf("Write to connect %s error: %s \n", conn.RemoteAddr(), err)
+		}
+		fmt.Print(">>> ")
+	}
 }

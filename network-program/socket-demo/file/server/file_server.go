@@ -1,11 +1,17 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	logger "sockect-demo/logger"
+	"strings"
 	"sync"
-	"time"
 )
+
+const ROOTDIR = "./data"
 
 var (
 	clients   = make(map[string]net.Conn) // 记录哪些客户端连接
@@ -13,6 +19,8 @@ var (
 )
 
 func main() {
+	logger.SetLevel(logger.INFO)
+
 	address := "127.0.0.1:2121"
 
 	l, err := net.Listen("tcp", address)
@@ -50,6 +58,45 @@ func fileServer(conn net.Conn) {
 		logger.Infof("Connect %s closed.", conn.RemoteAddr())
 	}()
 
-	logger.Infof("Connect %s will be closed.", conn.RemoteAddr())
-	time.Sleep(2 * time.Second)
+	scanner := bufio.NewScanner(conn)
+
+	for scanner.Scan() {
+		text := scanner.Text()
+
+		logger.Debug("Get text:", text)
+
+		if strings.HasPrefix(text, "list") {
+			logger.Debug("Should run listServe")
+			listServe(ROOTDIR, "")
+		}
+	}
+}
+
+func listServe(path string, prefix string) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		logger.Errorf("Read dir %s error: %s \n", path, err)
+		return
+	}
+
+	for i, entry := range entries {
+		var connector string
+		if i == len(entries)-1 {
+			connector = "└── "
+		} else {
+			connector = "├── "
+		}
+
+		fmt.Println(prefix + connector + entry.Name())
+
+		if entry.IsDir() {
+			newPrefix := prefix
+			if i == len(entries)-1 {
+				newPrefix += "    "
+			} else {
+				newPrefix += "│   "
+			}
+			listServe(filepath.Join(path, entry.Name()), newPrefix)
+		}
+	}
 }

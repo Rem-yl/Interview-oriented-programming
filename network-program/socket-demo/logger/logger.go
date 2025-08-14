@@ -9,7 +9,22 @@ import (
 	"time"
 )
 
-var logger *log.Logger
+// 日志等级
+const (
+	DEBUG = iota
+	INFO
+	ERROR
+)
+
+var (
+	logger   *log.Logger
+	logLevel = INFO // 默认等级
+)
+
+// SetLevel 设置日志等级
+func SetLevel(level int) {
+	logLevel = level
+}
 
 func init() {
 	logger = log.New(os.Stdout, "", 0) // 不要 log 包自带时间戳
@@ -36,29 +51,38 @@ func logPrefix() string {
 
 // Info 输出普通日志
 func Info(v ...interface{}) {
-	logger.Println(append([]interface{}{logPrefix(), "[INFO] - "}, v...)...)
+	if logLevel <= INFO {
+		logger.Println(append([]interface{}{logPrefix(), "[INFO] - "}, v...)...)
+	}
 }
 
 // Infof 输出格式化日志
 func Infof(format string, v ...interface{}) {
-	logger.Printf("%s [INFO] - "+format, append([]interface{}{logPrefix()}, v...)...)
+	if logLevel <= INFO {
+		logger.Printf("%s [INFO] - "+format, append([]interface{}{logPrefix()}, v...)...)
+	}
 }
 
+// Debug 输出调试日志
 func Debug(v ...interface{}) {
-	logger.Println(append([]interface{}{logPrefix(), "[DEBUG] - "}, v...)...)
+	if logLevel <= DEBUG {
+		logger.Println(append([]interface{}{logPrefix(), "[DEBUG] - "}, v...)...)
+	}
 }
 
-// Infof 输出格式化日志
+// Debugf 输出格式化调试日志
 func Debugf(format string, v ...interface{}) {
-	logger.Printf("%s [DEBUG] - "+format, append([]interface{}{logPrefix()}, v...)...)
+	if logLevel <= DEBUG {
+		logger.Printf("%s [DEBUG] - "+format, append([]interface{}{logPrefix()}, v...)...)
+	}
 }
 
-// Error 输出错误日志
+// Error 输出错误日志（始终打印）
 func Error(v ...interface{}) {
 	logger.Println(append([]interface{}{logPrefix(), "[ERROR] - "}, v...)...)
 }
 
-// Errorf 输出格式化错误日志
+// Errorf 输出格式化错误日志（始终打印）
 func Errorf(format string, v ...interface{}) {
 	logger.Printf("%s [ERROR] - "+format, append([]interface{}{logPrefix()}, v...)...)
 }
