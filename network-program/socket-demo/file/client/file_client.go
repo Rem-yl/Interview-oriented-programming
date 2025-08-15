@@ -20,16 +20,26 @@ func main() {
 
 	defer conn.Close()
 
-	scanner := bufio.NewScanner(os.Stdin)
+	stdScanner := bufio.NewScanner(os.Stdin)
+	connScanner := bufio.NewScanner(conn)
 	fmt.Print(">>> ")
 
-	for scanner.Scan() {
-		text := strings.ToLower(scanner.Text())
+	go func() {
+		for connScanner.Scan() {
+			text := connScanner.Text()
+			fmt.Println(text)
+
+			fmt.Print(">>> ")
+		}
+	}()
+
+	// 主线程 用于监控终端输入
+	for stdScanner.Scan() {
+		text := strings.ToLower(stdScanner.Text())
 		logger.Info("CMD: ", text)
 
 		if _, err := conn.Write([]byte(text + "\n")); err != nil {
 			logger.Errorf("Write to connect %s error: %s \n", conn.RemoteAddr(), err)
 		}
-		fmt.Print(">>> ")
 	}
 }

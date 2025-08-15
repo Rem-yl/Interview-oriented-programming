@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -11,7 +10,7 @@ import (
 	"sync"
 )
 
-const ROOTDIR = "./data"
+const ROOTDIR = "data"
 
 var (
 	clients   = make(map[string]net.Conn) // 记录哪些客户端连接
@@ -19,7 +18,7 @@ var (
 )
 
 func main() {
-	logger.SetLevel(logger.INFO)
+	logger.SetLevel(logger.DEBUG)
 
 	address := "127.0.0.1:2121"
 
@@ -62,41 +61,57 @@ func fileServer(conn net.Conn) {
 
 	for scanner.Scan() {
 		text := scanner.Text()
-
 		logger.Debug("Get text:", text)
+		cmd := strings.ToLower(text)
 
-		if strings.HasPrefix(text, "list") {
+		if cmd == "list" {
 			logger.Debug("Should run listServe")
-			listServe(ROOTDIR, "")
+			data, err := PrintTree(ROOTDIR, "")
+			if err != nil {
+				logger.Error("list dir %s error: %s", ROOTDIR, err)
+			}
+
+			logger.Debugf("Data: \n %s \n", data)
+			if _, err := conn.Write([]byte(data)); err != nil {
+				logger.Errorf("Write data to %s error: %s \n", conn.RemoteAddr(), err)
+			}
+		} else if strings.HasPrefix(cmd, "delete") {
+			logger.Debug("Should run delete serve")
+			deleteServe(cmd)
+
 		}
 	}
 }
 
-func listServe(path string, prefix string) {
-	entries, err := os.ReadDir(path)
+func PrintTree(root string, prefix string) (string, error) {
+	var result strings.Builder
+
+	entries, err := os.ReadDir(root)
 	if err != nil {
-		logger.Errorf("Read dir %s error: %s \n", path, err)
-		return
+		return "", err
 	}
 
 	for i, entry := range entries {
-		var connector string
+		connector := "├── "
+		newPrefix := prefix + "│   "
 		if i == len(entries)-1 {
 			connector = "└── "
-		} else {
-			connector = "├── "
+			newPrefix = prefix + "    "
 		}
 
-		fmt.Println(prefix + connector + entry.Name())
+		result.WriteString(prefix + connector + entry.Name() + "\n")
 
 		if entry.IsDir() {
-			newPrefix := prefix
-			if i == len(entries)-1 {
-				newPrefix += "    "
-			} else {
-				newPrefix += "│   "
+			subTree, err := PrintTree(filepath.Join(root, entry.Name()), newPrefix)
+			if err != nil {
+				return "", err
 			}
-			listServe(filepath.Join(path, entry.Name()), newPrefix)
+			result.WriteString(subTree)
 		}
 	}
+	return result.String(), nil
+}
+
+func deleteServe(cmd string) error {
+	return nil
 }
