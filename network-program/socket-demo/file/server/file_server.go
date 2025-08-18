@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -86,6 +87,13 @@ func fileServer(conn net.Conn) {
 			}
 
 			logger.Debugf("Data: \n %s", data)
+		} else if strings.HasPrefix(cmd, "upload") {
+			logger.Debug("Should run upload serve")
+			data, err = uploadServe(cmd)
+			if err != nil {
+				logger.Errorf("delete error: %s", err)
+				continue
+			}
 		}
 
 		if _, err = conn.Write([]byte(data)); err != nil {
@@ -151,4 +159,45 @@ func deleteServe(cmd string) (string, error) {
 	}
 
 	return data + "\n", nil
+}
+
+// upload file1 file2 means move file1 to file2
+func uploadServe(cmd string) (string, error) {
+	parts := strings.Split(cmd, " ")
+	logger.Debug("cmd parts: ", parts)
+
+	if len(parts) < 3 {
+		return "usage: upload src dst\n", nil
+	}
+
+	src := parts[1]
+	dst := filepath.Join(ROOTDIR, parts[2])
+	logger.Debugf("Copy file %s → %s", src, dst)
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return "", fmt.Errorf("create dir error: %w", err)
+	}
+
+	// 打开源文件
+	in, err := os.Open(src)
+	if err != nil {
+		return "", fmt.Errorf("open src file error: %w", err)
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return "", fmt.Errorf("create dst file error: %w", err)
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return "", fmt.Errorf("copy file error: %w", err)
+	}
+
+	if err := out.Sync(); err != nil {
+		return "", fmt.Errorf("sync file error: %w", err)
+	}
+
+	return fmt.Sprintf("upload (copy) %s → %s success\n", src, dst), nil
 }
