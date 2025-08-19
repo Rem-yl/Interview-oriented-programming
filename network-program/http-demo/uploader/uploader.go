@@ -3,10 +3,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"http-demo/logger"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 )
@@ -14,6 +16,11 @@ import (
 const (
 	ROOTPATH = "./data"
 )
+
+type User struct {
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
 
 // 初始化函数，确保上传目录存在
 func init() {
@@ -159,11 +166,48 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	</html>`, filePath, fileInfo.Size(), savePath)
 }
 
+// curl -X POST 127.0.0.1:8088/json -d "name=rem" -d "password=123"
+func jsonHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only Post Method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error Reading body", http.StatusInternalServerError)
+		return
+	}
+
+	defer r.Body.Close()
+	logger.Info("Get Post body: ", string(body))
+
+	values, err := url.ParseQuery(string(body))
+	if err != nil {
+		http.Error(w, "parse body error", http.StatusInternalServerError)
+		return
+	}
+
+	user := User{
+		Name:     values.Get("name"),
+		Password: values.Get("password"),
+	}
+
+	jsonData, err := json.Marshal(user)
+	if err != nil {
+		http.Error(w, "marshal json error", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, string(jsonData))
+}
+
 func main() {
 	address := "127.0.0.1:8088"
 
 	http.HandleFunc("/", uploadPage)
 	http.HandleFunc("/upload", uploadHandler)
+	http.HandleFunc("/json", jsonHandler)
 
 	fmt.Printf("服务器启动，监听地址: %s\n", address)
 	if err := http.ListenAndServe(address, nil); err != nil {
