@@ -37,9 +37,11 @@ func scanPort(port int, wg *sync.WaitGroup, ch chan bool) {
 
 func main() {
 
-	startPort := *flag.Int("start_port", 0, "start port")
-	endPort := *flag.Int("end_port", 1024, "end port")
-	workers := *flag.Int("num_workers", 32, "num of workers")
+	var startPort, endPort, workers int
+	flag.IntVar(&startPort, "start_port", 0, "start port")
+	flag.IntVar(&endPort, "end_port", 1024, "end port")
+	flag.IntVar(&workers, "num_workers", 32, "num of workers")
+	flag.Parse()
 
 	var wg sync.WaitGroup
 	concurr_chan := make(chan bool, workers)
