@@ -1,3 +1,4 @@
+// 本代码演示了Go语言的基本用法
 package main
 
 import (
