@@ -41,9 +41,11 @@
 **2. CAP 定理初探**
 
 - [X] 📖 阅读《DDIA》Chapter 9: Consistency and Consensus (第9章)
-- [ ] 📄 阅读论文简化版: [CAP Twelve Years Later: How the &#34;Rules&#34; Have Changed](https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/) (Eric Brewer)
-- [ ] 📺 观看视频: [What is CAP Theorem?](https://www.youtube.com/watch?v=k-Yaq8AHlFA) (8分钟)
-- [ ] ✍️ **任务**: 用真实案例说明为什么分布式系统必须在 C、A、P 中权衡,画出 CAP 三角形并标注常见系统的位置
+- [X] 📄 阅读论文简化版: [CAP Twelve Years Later: How the &#34;Rules&#34; Have Changed](https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/) (Eric Brewer)
+- [X] 📺 观看视频: [What is CAP Theorem?](https://www.youtube.com/watch?v=k-Yaq8AHlFA) (8分钟)
+- [X] ✍️ **任务**: 用真实案例说明为什么分布式系统必须在 C、A、P 中权衡,画出 CAP 三角形并标注常见系统的位置
+  本质上是由于分布式系统分区是不可避免的，而节点无法确定其他节点的状态（是网络故障了还是崩溃了）。因此分布式系统在网络分区的情况下必须考虑一致性和可用性的平衡。
+  类比你去ATM机取钱的案例：当你去一台ATM取钱时，发生了故障；这时会出现两种情况：1. ATM不理会故障的发生把钱吐给你，即保证可用性。但是这会导致不同的ATM机间数据的不一致；2. ATM告诉你系统有问题，没有办法取钱，即保证一致性。
 
 **3. 无状态服务设计**
 
