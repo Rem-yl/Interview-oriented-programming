@@ -33,26 +33,26 @@
 
 **1. 垂直扩展 vs 水平扩展**
 
-- [X] 📖 阅读《Designing Data-Intensive Applications》Chapter 1 (中文版《数据密集型应用系统设计》第1章)
+- [X] 📖 阅读《Designing Data-Intensive Applications》Chapter 1 → 📝 [笔记](notes/resources/books/DDIA/Ch01_scalability.md)
 - [X] 📺 观看视频: [Horizontal vs Vertical Scaling](https://www.youtube.com/watch?v=xpDnVSmNFX0) (15分钟)
 - [X] 📄 阅读文章: [Scalability for Dummies](https://www.lecloud.net/post/7295452622/scalability-for-dummies-part-1-clones) - 4篇系列文章
-- [X] ✍️ **任务**: 列表对比垂直扩展与水平扩展的优缺点、成本、适用场景
+- [X] ✍️ **任务**: 列表对比垂直扩展与水平扩展 → 📝 [对比表格](notes/week1/module1-scalability.md#垂直扩展-vs-水平扩展对比)
 
 **2. CAP 定理初探**
 
-- [X] 📖 阅读《DDIA》Chapter 9: Consistency and Consensus (第9章)
-- [X] 📄 阅读论文简化版: [CAP Twelve Years Later: How the &#34;Rules&#34; Have Changed](https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/) (Eric Brewer)
+- [X] 📖 阅读《DDIA》Chapter 9: Consistency and Consensus → 📝 [笔记](notes/resources/books/DDIA/Ch09_一致性与共识.md)
+- [X] 📄 阅读论文: [CAP Twelve Years Later](https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/) → 📝 [笔记](notes/resources/papers/CAP-Twelve-Years-Later.md)
 - [X] 📺 观看视频: [What is CAP Theorem?](https://www.youtube.com/watch?v=k-Yaq8AHlFA) (8分钟)
-- [X] ✍️ **任务**: 用真实案例说明为什么分布式系统必须在 C、A、P 中权衡,画出 CAP 三角形并标注常见系统的位置
-  本质上是由于分布式系统分区是不可避免的，而节点无法确定其他节点的状态（是网络故障了还是崩溃了）。因此分布式系统在网络分区的情况下必须考虑一致性和可用性的平衡。
-  类比你去ATM机取钱的案例：当你去一台ATM取钱时，发生了故障；这时会出现两种情况：1. ATM不理会故障的发生把钱吐给你，即保证可用性。但是这会导致不同的ATM机间数据的不一致；2. ATM告诉你系统有问题，没有办法取钱，即保证一致性。
+- [X] ✍️ **任务**: CAP 权衡案例分析 → 📝 [案例](notes/week1/module1-scalability.md#cap-定理案例分析)
+  - 核心理解: 分区不可避免，节点无法确定其他节点状态（网络故障 vs 崩溃）
+  - ATM 案例: 保证可用性会导致不一致；保证一致性要拒绝服务
 
-**3. 无状态服务设计**
+**3. 无状态服务设计** -> 📝 [笔记](notes/week1/module1-3-stateless-service.md)
 
-- [ ] 📄 阅读: [The Twelve-Factor App](https://12factor.net/) - 特别关注 VI. Processes 章节
-- [ ] 📄 阅读: [Stateless vs Stateful Services](https://medium.com/@maniakhitoccori/stateless-vs-stateful-architecture-63194d749c08)
-- [ ] 📺 观看: [Stateless Architecture](https://www.youtube.com/watch?v=1T2Xw9k6h8I) (10分钟)
-- [ ] ✍️ **任务**: 设计一个无状态的用户认证系统架构图
+- [X] 📄 阅读: [The Twelve-Factor App](https://12factor.net/) - 特别关注 VI. Processes 章节
+- [X] 📄 阅读: [Stateless vs Stateful Services](https://medium.com/@maniakhitoccori/stateless-vs-stateful-architecture-63194d749c08)
+- [X] 📺 观看: [Stateless Architecture](https://www.youtube.com/watch?v=20tpk8A_xa0&t=14s) (10分钟)
+- [X] ✍️ **任务**: 设计一个无状态的用户认证系统架构图
 
 **4. 会话状态管理**
 
