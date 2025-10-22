@@ -78,9 +78,31 @@ func profileHandler(c *gin.Context) {
 
 }
 
+func debugSessionHandler(c *gin.Context) {
+	sessions := []map[string]interface{}{}
+
+	sessionStore.Range(func(key, value any) bool {
+		session := value.(Session)
+		sessions = append(sessions, map[string]interface{}{
+			"session_id": key.(string),
+			"username":   session.UserName,
+			"login_time": session.LoginTime,
+			"server_id":  session.ServerID,
+		})
+		return true
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"server_id":     serverID,
+		"session_count": len(sessions),
+		"sessions":      sessions,
+	})
+}
+
 func main() {
 	r := gin.Default()
 	r.POST("/login", loginHandler)
 	r.GET("/profile", profileHandler)
+	r.GET("/debug/sessions", debugSessionHandler)
 	r.Run(":" + port)
 }

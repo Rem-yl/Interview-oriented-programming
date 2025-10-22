@@ -1,0 +1,17 @@
+# Pytest 测试依赖
+
+# 核心测试框架
+pytest>=7.4.0
+
+# HTTP 请求
+requests>=2.31.0
+
+# 测试报告插件
+pytest-html>=3.2.0          # HTML 报告
+pytest-cov>=4.1.0           # 代码覆盖率（可选）
+pytest-timeout>=2.1.0       # 超时控制
+pytest-xdist>=3.3.1         # 并行测试（可选）
+
+# 其他有用的插件
+pytest-sugar>=0.9.7         # 更好看的输出
+pytest-benchmark>=4.0.0     # 性能基准测试（可选）
