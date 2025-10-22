@@ -617,6 +617,11 @@ server {
 }
 ```
 
+运行`nginx-redis`
+```bash
+docker run -d --name nginx-redis -p 81:81 -v $(pwd)/docker/nginx-redis.conf:/etc/nginx/conf.d/default.conf:ro nginx:alpine
+```
+
 **关键区别**：
 
 - ❌ 不使用 `ip_hash`

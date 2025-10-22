@@ -97,7 +97,7 @@ func getEnv(key, defaultValue string) string {
 
 // 服务器配置
 var serverID = getEnv("SERVER_ID", "server-default") // 服务器唯一标识
-var port = getEnv("PORT", "8080")                    // 监听端口
+var port = getEnv("PORT", "8081")                    // 监听端口
 
 // sessionStore 本地内存存储，使用 sync.Map 保证并发安全
 // 关键点: 每个服务器实例独立存储，不共享
@@ -181,6 +181,7 @@ func profileHandler(c *gin.Context) {
 		"username":   session.UserName,
 		"login_time": session.LoginTime,
 		"server_id":  session.ServerID, // 客户端可以看到是哪个服务器处理的
+		"ip":         c.Request.Host,
 	})
 
 }
