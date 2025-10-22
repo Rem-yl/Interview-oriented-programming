@@ -37,11 +37,11 @@
 
 ### 三种方案实现
 
-| 方案 | 后端语言 | 端口 | 特点 |
-|------|---------|------|------|
-| **方案1: Sticky Session** | Go | 8081-8083 | Nginx IP Hash 路由 |
-| **方案2: Redis Session** | Go + Python 示例 | 8091-8093 | 集中式存储 |
-| **方案3: JWT Token** | Go | 8101-8103 | 无状态认证 |
+| 方案                            | 后端语言         | 端口      | 特点               |
+| ------------------------------- | ---------------- | --------- | ------------------ |
+| **方案1: Sticky Session** | Go               | 8081-8083 | Nginx IP Hash 路由 |
+| **方案2: Redis Session**  | Go + Python 示例 | 8091-8093 | 集中式存储         |
+| **方案3: JWT Token**      | Go               | 8101-8103 | 无状态认证         |
 
 ---
 
@@ -122,6 +122,7 @@ redis-cli ping  # 应返回 PONG
 #### Step 2.1: Go 服务器实现要点
 
 **核心功能**：
+
 1. ✅ 在本地内存中存储 Session (使用 `sync.Map`)
 2. ✅ 登录时生成 Session ID，存储在 Cookie 中
 3. ✅ 每个服务器实例有唯一标识（Server ID）
@@ -158,6 +159,7 @@ http.SetCookie(w, &http.Cookie{
 ```
 
 **重点观察**：
+
 - 每个服务器的 Session 是独立的
 - 服务器重启后 Session 丢失
 - 记录日志：哪个服务器处理了哪个请求
@@ -200,56 +202,291 @@ PORT=8082 SERVER_ID=server-2 go run sticky-session/main.go &
 PORT=8083 SERVER_ID=server-3 go run sticky-session/main.go &
 
 # 启动 Nginx (Docker 方式)
-docker run -d --name nginx-sticky \
-  -p 8080:80 \
-  -v $(pwd)/docker/nginx-sticky.conf:/etc/nginx/nginx.conf:ro \
+docker run -d --name nginx-sticky -p 8080:80 -v $(pwd)/docker/nginx-sticky.conf:/etc/nginx/conf.d/default.conf:ro nginx:alpine
+```
+
+#### Step 2.3: Nginx 负载均衡验证
+
+**为什么需要验证 Nginx 在工作？**
+
+在本地测试时，你可能会疑惑：
+- Nginx 是否真的在转发请求？
+- `ip_hash` 算法是否在工作？
+- 如何证明负载均衡真的在分散请求？
+
+##### 验证方法 1: 对比不同负载均衡算法
+
+**创建两个 Nginx 配置**：
+
+1. **ip_hash 配置** (`docker/nginx-sticky.conf`) - 已有
+2. **round_robin 配置** (`docker/nginx-round-robin.conf`) - 新建
+
+```nginx
+# docker/nginx-round-robin.conf
+upstream backend_round_robin {
+    # Round Robin: 轮询分配（默认算法，不使用 ip_hash）
+    server host.docker.internal:8081;
+    server host.docker.internal:8082;
+    server host.docker.internal:8083;
+}
+
+server {
+    listen 80;
+    server_name localhost;
+
+    location / {
+        proxy_pass http://backend_round_robin;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+**切换配置并对比**：
+
+```bash
+# 使用 ip_hash (Sticky Session)
+docker rm -f nginx-sticky
+docker run -d --name nginx-sticky -p 8080:80 \
+  -v $(pwd)/docker/nginx-sticky.conf:/etc/nginx/conf.d/default.conf:ro \
+  nginx:alpine
+
+# 使用 round_robin (轮询)
+docker rm -f nginx-sticky
+docker run -d --name nginx-round-robin -p 8080:80 \
+  -v $(pwd)/docker/nginx-round-robin.conf:/etc/nginx/conf.d/default.conf:ro \
   nginx:alpine
 ```
 
-#### Step 2.3: 测试脚本要点
+##### 验证方法 2: 使用测试脚本观察
 
-**文件**: `test-scripts/test_sticky.py`
+**文件**: `test-scripts/verify_nginx.py`
 
-**测试场景**：
+```python
+import requests
 
-1. **基本功能测试**：
-   ```python
-   import requests
+def test_nginx_algorithm():
+    """检测当前 Nginx 使用的负载均衡算法"""
+    nginx_url = "http://localhost:8080"
 
-   session = requests.Session()  # 自动管理 Cookie
+    # 登录并获取 Session
+    session = requests.Session()
+    session.post(f"{nginx_url}/login",
+                json={"username": "test", "password": "123456"})
 
-   # 登录
-   resp = session.post('http://localhost:8080/login',
-                       json={'username': 'alice', 'password': '123456'})
-   print(f"Login: {resp.json()}")
+    # 连续发送 10 个请求
+    success_count = 0
+    servers = []
 
-   # 多次访问，观察是否总是同一台服务器
-   for i in range(10):
-       resp = session.get('http://localhost:8080/profile')
-       print(f"Request {i+1}: Server={resp.json()['server_id']}")
-   ```
+    for i in range(10):
+        resp = session.get(f"{nginx_url}/profile")
+        if resp.status_code == 200:
+            success_count += 1
+            servers.append(resp.json()['server_id'])
 
-2. **多客户端测试**：
-   ```python
-   # 模拟 5 个不同用户（不同 Session）
-   for user_id in range(5):
-       session = requests.Session()
-       session.post('http://localhost:8080/login',
-                   json={'username': f'user{user_id}'})
-       # 观察是否被分配到不同服务器
-   ```
+    # 判断算法
+    unique_servers = set(servers)
 
-3. **故障注入测试**：
-   ```python
-   # 测试步骤：
-   # 1. 登录成功
-   # 2. 手动杀死处理该用户的服务器（kill -9 PID）
-   # 3. 再次请求，观察是否 Session 丢失
-   ```
+    print(f"总请求: 10")
+    print(f"成功: {success_count}")
+    print(f"访问的服务器数: {len(unique_servers)}")
+
+    if len(unique_servers) == 1:
+        print("✅ 当前算法: ip_hash (Sticky Session)")
+        print("   特征: 所有请求都路由到同一台服务器")
+    else:
+        print("✅ 当前算法: round_robin (轮询)")
+        print("   特征: 请求分散到多台服务器")
+        print(f"   成功率: {success_count * 10}%")
+```
+
+**运行测试**：
+
+```bash
+# 使用 ip_hash 时
+python verify_nginx.py
+# 输出:
+# 成功: 10
+# 访问的服务器数: 1
+# ✅ 当前算法: ip_hash
+
+# 使用 round_robin 时
+python verify_nginx.py
+# 输出:
+# 成功: 3
+# 访问的服务器数: 1 (但实际访问了3台)
+# ✅ 当前算法: round_robin
+# 成功率: 30% (约 1/3，因为 Session 只在1台服务器)
+```
+
+##### 验证方法 3: 可视化轮询过程
+
+**文件**: `test-scripts/visualize_routing.py`
+
+```python
+def visualize_round_robin():
+    """可视化 Round Robin 的轮询模式"""
+    nginx_url = "http://localhost:8080"
+
+    session = requests.Session()
+    session.post(f"{nginx_url}/login",
+                json={"username": "alice", "password": "123456"})
+
+    print(f"{'序号':<6} {'路由到':<15} {'状态':<10}")
+    print("-" * 40)
+
+    for i in range(12):
+        resp = session.get(f"{nginx_url}/profile")
+
+        if resp.status_code == 200:
+            server = resp.json()['server_id']
+            status = "✅ 成功"
+        else:
+            server = "未知"
+            status = "❌ 401"
+
+        print(f"{i+1:<6} {server:<15} {status:<10}")
+
+# 运行后看到周期性模式:
+# 1      未知            ❌ 401     ← server-1
+# 2      未知            ❌ 401     ← server-2
+# 3      server-3       ✅ 成功     ← Session 在这里
+# 4      未知            ❌ 401     ← server-1
+# 5      未知            ❌ 401     ← server-2
+# 6      server-3       ✅ 成功     ← 轮询回到 server-3
+```
+
+**关键观察点**：
+
+- **ip_hash**: 成功率 100%，所有请求去同一台服务器
+- **round_robin**: 成功率 ≈ 33%（3台服务器中1台有Session）
+- **周期性模式**: 失败→失败→成功→失败→失败→成功（循环）
+
+##### 验证方法 4: 直接访问 vs 通过 Nginx
+
+```python
+def compare_direct_vs_nginx():
+    """对比直接访问后端和通过 Nginx"""
+
+    # 通过 Nginx (自动路由)
+    session_nginx = requests.Session()
+    session_nginx.post("http://localhost:8080/login",
+                      json={"username": "alice", "password": "123456"})
+    resp = session_nginx.get("http://localhost:8080/profile")
+    nginx_server = resp.json()['server_id']
+
+    print(f"通过 Nginx (8080)     → {nginx_server}")
+
+    # 直接访问各个后端
+    for port in [8081, 8082, 8083]:
+        session_direct = requests.Session()
+        resp = session_direct.post(f"http://localhost:{port}/login",
+                                   json={"username": "alice", "password": "123456"})
+        resp = session_direct.get(f"http://localhost:{port}/profile")
+        server_id = resp.json()['server_id']
+
+        marker = "← Nginx 选择的" if server_id == nginx_server else ""
+        print(f"直接访问 ({port})     → {server_id} {marker}")
+```
+
+**输出示例**：
+```
+通过 Nginx (8080)     → server-3
+直接访问 (8081)       → server-1
+直接访问 (8082)       → server-2
+直接访问 (8083)       → server-3 ← Nginx 选择的
+```
+
+##### 两种算法对比总结
+
+| 特性 | ip_hash | round_robin |
+|------|---------|-------------|
+| **路由依据** | 客户端 IP 地址哈希 | 轮询顺序 |
+| **Sticky Session** | ✅ 自动保证 | ❌ 不保证 |
+| **同一客户端** | 总是去同一台服务器 | 轮流访问各服务器 |
+| **单机测试表现** | 成功率 100% | 成功率 ≈ 33% (3台) |
+| **适用场景** | Session 存本地内存 | 无状态服务/共享存储 |
+| **配置** | `ip_hash;` | 默认（无需配置） |
+
+**为什么本地测试 ip_hash 所有请求都去同一台？**
+
+```
+本地测试: 所有请求来自 127.0.0.1 (同一 IP)
+    ↓
+ip_hash 计算: hash("127.0.0.1") % 3 = 固定值
+    ↓
+总是路由到: 同一台服务器 (如 server-3)
+```
+
+**生产环境**：用户来自不同 IP，会自动分散到不同服务器。
+
+##### 快速验证命令
+
+```bash
+# 1. 启动 3 个后端服务器
+cd sticky-session
+PORT=8081 SERVER_ID=server-1 go run main.go &
+PORT=8082 SERVER_ID=server-2 go run main.go &
+PORT=8083 SERVER_ID=server-3 go run main.go &
+
+# 2. 启动 Nginx (ip_hash)
+cd ..
+docker run -d --name nginx-sticky -p 8080:80 \
+  -v $(pwd)/docker/nginx-sticky.conf:/etc/nginx/conf.d/default.conf:ro \
+  nginx:alpine
+
+# 3. 验证 ip_hash
+cd test-scripts
+python verify_nginx.py
+# 期望: 成功率 100%，所有请求去同一台服务器
+
+# 4. 切换到 round_robin
+docker rm -f nginx-sticky
+docker run -d --name nginx-round-robin -p 8080:80 \
+  -v $(pwd)/../docker/nginx-round-robin.conf:/etc/nginx/conf.d/default.conf:ro \
+  nginx:alpine
+
+# 5. 验证 round_robin
+python verify_round_robin.py
+# 期望: 成功率 ≈ 33%，请求轮询到 3 台服务器
+
+# 6. 查看 Nginx 日志
+docker logs nginx-round-robin
+
+# 7. 清理
+docker rm -f nginx-round-robin
+killall main  # 停止所有 Go 服务器
+```
+
+#### Step 2.4: 完整测试脚本
+
+**文件**: `test-scripts/test_sticky_session.py` (使用 pytest)
+
+查看文件顶部的文档字符串了解如何运行：
+
+```bash
+# 查看运行说明
+head -n 63 test-scripts/test_sticky_session.py
+
+# 运行所有测试
+pytest test_sticky_session.py -v
+
+# 只运行基础功能测试
+pytest test_sticky_session.py::TestBasicFunctionality -v
+```
 
 **期望结果**：
+
+使用 **ip_hash** 时：
 - ✅ 同一客户端的请求总是路由到同一台服务器
+- ✅ 所有测试通过 (13/13)
 - ❌ 服务器宕机后，Session 丢失，需要重新登录
+
+使用 **round_robin** 时：
+- ✅ 请求被轮询分配到不同服务器
+- ❌ 大部分测试失败（约 70% 失败率）
+- ❌ 证明 Session 隔离问题（需要 Redis 或 JWT 解决）
 
 ---
 
@@ -258,6 +495,7 @@ docker run -d --name nginx-sticky \
 #### Step 3.1: Go 服务器实现要点
 
 **核心功能**：
+
 1. ✅ 连接 Redis 客户端 (使用 `go-redis/redis`)
 2. ✅ Session 存储在 Redis，Key 格式: `session:{session_id}`
 3. ✅ 所有服务器共享同一个 Redis
@@ -380,6 +618,7 @@ server {
 ```
 
 **关键区别**：
+
 - ❌ 不使用 `ip_hash`
 - ✅ 使用默认的轮询（Round Robin）
 - ✅ 请求可以被路由到任意服务器
@@ -391,6 +630,7 @@ server {
 **测试场景**：
 
 1. **跨服务器 Session 共享**：
+
    ```python
    session = requests.Session()
 
@@ -402,16 +642,16 @@ server {
        resp = session.get('http://localhost:8081/profile')
        print(f"Request {i+1}: Server={resp.json()['server_id']}, User={resp.json()['username']}")
    ```
-
 2. **Redis 中的数据查看**：
+
    ```bash
    redis-cli
    KEYS session:*          # 查看所有 Session Key
    GET session:abc123      # 查看具体 Session 内容
    TTL session:abc123      # 查看剩余过期时间
    ```
-
 3. **服务器宕机测试**：
+
    ```python
    # 测试步骤：
    # 1. 登录，Session 存储到 Redis
@@ -420,6 +660,7 @@ server {
    ```
 
 **期望结果**：
+
 - ✅ 请求可以路由到不同服务器，但都能访问 Session
 - ✅ 服务器宕机不影响 Session（数据在 Redis 中）
 - ✅ 跨语言服务器（Go + Python）可以共享 Session
@@ -431,6 +672,7 @@ server {
 #### Step 4.1: Go 服务器实现要点
 
 **核心功能**：
+
 1. ✅ 使用 `golang-jwt/jwt` 库生成和验证 JWT
 2. ✅ 登录返回 Token，不存储 Session
 3. ✅ 验证 Token 签名和过期时间
@@ -563,6 +805,7 @@ func validateTokenWithBlacklist(tokenString string) (*Claims, error) {
 **测试场景**：
 
 1. **基本认证流程**：
+
    ```python
    import requests
 
@@ -577,8 +820,8 @@ func validateTokenWithBlacklist(tokenString string) (*Claims, error) {
    resp = requests.get('http://localhost:8101/profile', headers=headers)
    print(f"Profile: {resp.json()}")
    ```
-
 2. **Token 解码（不验证签名）**：
+
    ```python
    import jwt
 
@@ -587,8 +830,8 @@ func validateTokenWithBlacklist(tokenString string) (*Claims, error) {
    print(f"User ID: {payload['user_id']}")
    print(f"Expires At: {payload['exp']}")
    ```
-
 3. **过期 Token 测试**：
+
    ```python
    import time
 
@@ -602,8 +845,8 @@ func validateTokenWithBlacklist(tokenString string) (*Claims, error) {
                       headers={'Authorization': f'Bearer {token}'})
    print(f"Status: {resp.status_code}")  # 应该是 401
    ```
-
 4. **黑名单测试**：
+
    ```python
    # 登出
    requests.post('http://localhost:8101/logout',
@@ -616,6 +859,7 @@ func validateTokenWithBlacklist(tokenString string) (*Claims, error) {
    ```
 
 **期望结果**：
+
 - ✅ 服务器无需存储 Token，完全无状态
 - ✅ 请求可以路由到任意服务器
 - ✅ Token 过期后自动失效
@@ -630,6 +874,7 @@ func validateTokenWithBlacklist(tokenString string) (*Claims, error) {
 **文件**: `test-scripts/performance_compare.py`
 
 **测试指标**：
+
 1. **延迟（Latency）**：单次请求的响应时间
 2. **吞吐量（Throughput）**：每秒处理的请求数（QPS）
 3. **内存占用**：服务器的内存使用情况
@@ -719,11 +964,11 @@ ab -n 10000 -c 100 -H "Authorization: Bearer <token>" http://localhost:8101/prof
 
 **期望结果示例**：
 
-| 方案 | P50 延迟 | P99 延迟 | QPS | 内存占用(10万用户) |
-|------|---------|---------|-----|------------------|
-| Sticky Session | ~0.1ms | ~0.5ms | 50,000 | 500MB/台 |
-| Redis Session | ~1.5ms | ~3ms | 30,000 | Redis: 2GB |
-| JWT Token | ~0.3ms | ~1ms | 45,000 | ~0 |
+| 方案           | P50 延迟 | P99 延迟 | QPS    | 内存占用(10万用户) |
+| -------------- | -------- | -------- | ------ | ------------------ |
+| Sticky Session | ~0.1ms   | ~0.5ms   | 50,000 | 500MB/台           |
+| Redis Session  | ~1.5ms   | ~3ms     | 30,000 | Redis: 2GB         |
+| JWT Token      | ~0.3ms   | ~1ms     | 45,000 | ~0                 |
 
 ---
 
@@ -763,6 +1008,7 @@ except Exception as e:
 ```
 
 **观察点**：
+
 - **Sticky Session**: Session 丢失，401 错误
 - **Redis Session**: 自动路由到其他服务器，正常返回
 - **JWT Token**: 自动路由到其他服务器，正常返回
@@ -797,21 +1043,21 @@ sudo ipfw add pipe 1 ip from any to 127.0.0.1 dst-port 6379
 
 ### 功能对比
 
-| 功能 | Sticky Session | Redis Session | JWT Token |
-|------|---------------|---------------|-----------|
-| 跨服务器共享 | ❌ | ✅ | ✅ |
-| 服务器宕机恢复 | ❌ | ✅ | ✅ |
-| 主动登出 | ✅ | ✅ | ⚠️ 需黑名单 |
-| 水平扩展 | ⚠️ 困难 | ✅ | ✅ |
-| 依赖外部服务 | ❌ | ✅ Redis | ❌ |
+| 功能           | Sticky Session | Redis Session | JWT Token     |
+| -------------- | -------------- | ------------- | ------------- |
+| 跨服务器共享   | ❌             | ✅            | ✅            |
+| 服务器宕机恢复 | ❌             | ✅            | ✅            |
+| 主动登出       | ✅             | ✅            | ⚠️ 需黑名单 |
+| 水平扩展       | ⚠️ 困难      | ✅            | ✅            |
+| 依赖外部服务   | ❌             | ✅ Redis      | ❌            |
 
 ### 性能数据（自己测试填写）
 
-| 方案 | P50 延迟(ms) | P99 延迟(ms) | QPS | 内存占用 |
-|------|-------------|-------------|-----|----------|
-| Sticky Session | _____ | _____ | _____ | _____ |
-| Redis Session | _____ | _____ | _____ | _____ |
-| JWT Token | _____ | _____ | _____ | _____ |
+| 方案           | P50 延迟(ms) | P99 延迟(ms) | QPS   | 内存占用 |
+| -------------- | ------------ | ------------ | ----- | -------- |
+| Sticky Session | _____        | _____        | _____ | _____    |
+| Redis Session  | _____        | _____        | _____ | _____    |
+| JWT Token      | _____        | _____        | _____ | _____    |
 
 ---
 
@@ -820,17 +1066,18 @@ sudo ipfw add pipe 1 ip from any to 127.0.0.1 dst-port 6379
 ### 关键理解
 
 1. **Sticky Session**：
+
    - ✅ 理解 Nginx `ip_hash` 的工作原理
    - ✅ 明白为什么服务器宕机会导致 Session 丢失
    - ✅ 体会"有状态服务"的扩展困难
-
 2. **Redis Session**：
+
    - ✅ 理解"集中式存储"的概念
    - ✅ 观察 Redis 中 Session 的存储格式
    - ✅ 体验跨服务器共享的优势
    - ✅ 理解 Redis 成为单点故障的风险
-
 3. **JWT Token**：
+
    - ✅ 理解"无状态"的真正含义
    - ✅ 掌握 JWT 的三部分结构（Header.Payload.Signature）
    - ✅ 理解为什么 JWT 无法主动撤销
@@ -839,15 +1086,19 @@ sudo ipfw add pipe 1 ip from any to 127.0.0.1 dst-port 6379
 ### 常见问题 FAQ
 
 **Q1: Sticky Session 下，如何保证负载均衡？**
+
 - A: 使用 `ip_hash` 会导致负载不均，改进方案是使用 `consistent hash`
 
 **Q2: Redis Session 的性能瓶颈在哪？**
+
 - A: 网络延迟（~1-2ms），高并发下需要 Redis 主从分离 + 连接池
 
 **Q3: JWT Token 太大怎么办？**
+
 - A: 只存储必要字段（user_id），详细信息从数据库查询
 
 **Q4: 如何选择适合的方案？**
+
 - A: 参考笔记中的决策树，主要看：规模、扩展需求、主动登出需求
 
 ---
@@ -876,6 +1127,7 @@ docker run -d --name redis-sentinel redis:alpine --sentinel
 ### 高级实验3: JWT 刷新 Token
 
 **实现双 Token 机制**：
+
 - Access Token: 15分钟
 - Refresh Token: 7天
 
