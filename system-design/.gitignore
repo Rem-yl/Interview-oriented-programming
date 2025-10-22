@@ -9,6 +9,7 @@
 *.test
 *.out
 vendor/
+pids/
 
 # Python
 __pycache__/

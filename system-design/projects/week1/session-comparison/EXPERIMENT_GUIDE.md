@@ -45,6 +45,102 @@
 
 ---
 
+## 🚀 快速开始（5分钟）
+
+如果你想快速启动所有服务器并开始实验，按照以下步骤操作：
+
+### 1. 一键启动所有服务器
+
+```bash
+cd /Users/yule/Desktop/opera/2_code/Interview-oriented-programming/system-design/projects/week1/session-comparison
+
+# 启动所有服务器 (Sticky Session + Redis Session + JWT Token)
+./start_all_servers.sh
+```
+
+这个脚本会自动：
+- 启动 9 个 Go 服务器（每种方案 3 个）
+- 启动 Redis Docker 容器（如果需要）
+- 检查端口可用性
+- 等待服务器完全启动
+- 显示所有服务器的状态
+
+### 2. 检查服务器状态
+
+```bash
+./check_servers.sh
+```
+
+你应该看到所有服务器都显示为"✅ 监听中"和"✅ 正常"。
+
+### 3. 运行性能测试
+
+```bash
+cd test-scripts
+
+# 完整性能测试 (延迟 + 吞吐量)
+python performance_compare.py
+
+# 或者只测试特定方案
+python performance_compare.py --schemes sticky jwt --test latency
+```
+
+### 4. 停止所有服务器
+
+```bash
+cd ..
+./stop_all_servers.sh
+```
+
+### 启动/停止脚本选项
+
+```bash
+# 只启动特定方案
+./start_all_servers.sh sticky    # 只启动 Sticky Session
+./start_all_servers.sh redis     # 只启动 Redis Session
+./start_all_servers.sh jwt       # 只启动 JWT Token
+
+# 只停止特定方案
+./stop_all_servers.sh sticky
+./stop_all_servers.sh redis
+./stop_all_servers.sh jwt
+
+# 强制清理所有 Go 进程（慎用）
+./stop_all_servers.sh force
+```
+
+### 性能测试选项
+
+```bash
+cd test-scripts
+
+# 只测试延迟
+python performance_compare.py --test latency --requests 100
+
+# 只测试吞吐量
+python performance_compare.py --test throughput --duration 30 --concurrency 100
+
+# 测试并发扩展性
+python performance_compare.py --test concurrency
+
+# 自定义参数
+python performance_compare.py --test latency --requests 1000 --schemes redis
+```
+
+### 查看日志
+
+```bash
+# 实时查看单个日志
+tail -f logs/sticky-server-1.log
+tail -f logs/redis-server-1.log
+tail -f logs/jwt-server-1.log
+
+# 查看所有日志
+tail -f logs/*.log
+```
+
+---
+
 ## 🎯 实验步骤详解
 
 ### 阶段一：准备工作
@@ -874,106 +970,577 @@ func validateTokenWithBlacklist(tokenString string) (*Claims, error) {
 
 ### 阶段五：性能对比测试
 
-#### Step 5.1: 编写性能测试脚本
+> **目标**: 通过科学的性能测试，量化对比三种会话管理方案的性能差异
 
-**文件**: `test-scripts/performance_compare.py`
+#### 📊 测试指标说明
 
-**测试指标**：
+##### 1. 延迟 (Latency)
 
-1. **延迟（Latency）**：单次请求的响应时间
-2. **吞吐量（Throughput）**：每秒处理的请求数（QPS）
-3. **内存占用**：服务器的内存使用情况
+**定义**: 从发送请求到收到响应的时间
 
-**测试方法**：
+**关键指标**:
+- **P50 (中位数)**: 50% 的请求延迟低于此值
+- **P95**: 95% 的请求延迟低于此值 (常用于 SLA)
+- **P99**: 99% 的请求延迟低于此值 (尾部延迟)
+- **平均值**: 所有请求的平均延迟
+- **最小值/最大值**: 最快和最慢的请求
 
-```python
-import requests
-import time
-import statistics
-from concurrent.futures import ThreadPoolExecutor
+**为什么重要**:
+- 直接影响用户体验
+- P99 比平均值更能反映实际体验（避免被平均值掩盖的慢请求）
 
-def test_latency(url, headers=None, cookies=None):
-    """测试单次请求延迟"""
-    latencies = []
+##### 2. 吞吐量 (Throughput)
 
-    for _ in range(100):
-        start = time.time()
-        requests.get(url, headers=headers, cookies=cookies)
-        latency = (time.time() - start) * 1000  # 转换为毫秒
-        latencies.append(latency)
+**定义**: 系统每秒能处理的请求数 (QPS - Queries Per Second)
 
-    return {
-        'p50': statistics.median(latencies),
-        'p95': statistics.quantiles(latencies, n=20)[18],
-        'p99': statistics.quantiles(latencies, n=100)[98],
-        'avg': statistics.mean(latencies)
-    }
+**关键指标**:
+- **QPS**: 每秒请求数
+- **成功率**: 成功请求占总请求的比例
+- **并发数**: 同时发起请求的线程/连接数
 
-def test_throughput(url, duration=10, concurrency=50):
-    """测试吞吐量"""
-    request_count = 0
+**为什么重要**:
+- 反映系统的处理能力
+- 决定系统能支撑的用户规模
 
-    def make_request():
-        nonlocal request_count
-        requests.get(url)
-        request_count += 1
+##### 3. 并发扩展性 (Concurrency Scalability)
 
-    start = time.time()
-    end_time = start + duration
+**定义**: 系统在不同并发数下的性能表现
 
-    with ThreadPoolExecutor(max_workers=concurrency) as executor:
-        while time.time() < end_time:
-            executor.submit(make_request)
+**观察点**:
+- QPS 随并发数的变化趋势
+- 什么并发数下达到峰值 QPS
+- 高并发下的错误率变化
 
-    elapsed = time.time() - start
-    qps = request_count / elapsed
+**为什么重要**:
+- 帮助确定系统的性能瓶颈
+- 指导水平扩展决策
 
-    return {
-        'total_requests': request_count,
-        'qps': qps,
-        'duration': elapsed
-    }
+#### Step 5.1: 测试准备
 
-# 对比三种方案
-schemes = {
-    'Sticky Session': {'url': 'http://localhost:8080/profile', 'cookies': ...},
-    'Redis Session': {'url': 'http://localhost:8081/profile', 'cookies': ...},
-    'JWT Token': {'url': 'http://localhost:8101/profile', 'headers': ...}
-}
-
-for name, config in schemes.items():
-    print(f"\n=== {name} ===")
-    latency = test_latency(config['url'], ...)
-    print(f"P50: {latency['p50']:.2f}ms")
-    print(f"P99: {latency['p99']:.2f}ms")
-
-    throughput = test_throughput(config['url'])
-    print(f"QPS: {throughput['qps']:.0f}")
-```
-
-**使用 Apache Bench（更专业）**：
+确保所有服务器已启动：
 
 ```bash
-# 安装
-brew install apache2  # macOS
+# 使用一键启动脚本
+./start_all_servers.sh
 
-# 测试 Sticky Session
-ab -n 10000 -c 100 -C "session_id=abc123" http://localhost:8080/profile
+# 检查状态
+./check_servers.sh
 
-# 测试 Redis Session
-ab -n 10000 -c 100 -C "session_id=xyz789" http://localhost:8081/profile
-
-# 测试 JWT Token
-ab -n 10000 -c 100 -H "Authorization: Bearer <token>" http://localhost:8101/profile
+# 所有服务器应该显示为"✅ 监听中"和"✅ 正常"
 ```
 
-**期望结果示例**：
+#### Step 5.2: 执行性能测试
 
-| 方案           | P50 延迟 | P99 延迟 | QPS    | 内存占用(10万用户) |
-| -------------- | -------- | -------- | ------ | ------------------ |
-| Sticky Session | ~0.1ms   | ~0.5ms   | 50,000 | 500MB/台           |
-| Redis Session  | ~1.5ms   | ~3ms     | 30,000 | Redis: 2GB         |
-| JWT Token      | ~0.3ms   | ~1ms     | 45,000 | ~0                 |
+##### 测试 1: 延迟对比测试
+
+**目的**: 对比三种方案的响应延迟
+
+```bash
+cd test-scripts
+
+# 运行延迟测试 (100 个请求)
+python performance_compare.py --test latency --requests 100
+```
+
+**预期输出示例**:
+```
+======================================================================
+测试延迟: Sticky Session
+======================================================================
+发送 100 个请求...
+  进度: 20/100 (20%)
+  进度: 40/100 (40%)
+  进度: 60/100 (60%)
+  进度: 80/100 (80%)
+  进度: 100/100 (100%)
+
+结果:
+  总请求数: 100
+  成功: 100, 失败: 0
+  成功率: 100.00%
+
+  延迟统计:
+    最小值:  0.35 ms
+    平均值:  1.52 ms
+    P50:     1.45 ms
+    P95:     2.80 ms
+    P99:     3.50 ms
+    最大值:  5.20 ms
+
+======================================================================
+对比汇总: LATENCY
+======================================================================
+
+方案                 P50 (ms)     P95 (ms)     P99 (ms)     平均 (ms)
+----------------------------------------------------------------------
+Sticky Session       1.45         2.80         3.50         1.52
+Redis Session        2.85         5.20         6.80         3.10
+JWT Token            1.20         2.50         3.20         1.35
+
+推荐:
+  延迟最低: JWT Token (P50: 1.20 ms)
+```
+
+**如何解读**:
+- **P50 < 2ms**: 延迟很低，用户体验好
+- **P95 < 5ms**: 95% 的用户体验好
+- **P99 > 10ms**: 需要关注，可能有性能问题
+
+**差异原因分析**:
+- **JWT Token 最快**: 只需验证签名，无存储访问
+- **Sticky Session 较快**: 本地内存读取，无网络 I/O
+- **Redis Session 较慢**: 每次请求需要访问 Redis (~1-2ms 网络延迟)
+
+##### 测试 2: 吞吐量对比测试
+
+**目的**: 对比三种方案的 QPS (每秒请求数)
+
+```bash
+# 运行吞吐量测试 (持续 10 秒，50 并发)
+python performance_compare.py --test throughput --duration 10 --concurrency 50
+```
+
+**预期输出示例**:
+```
+======================================================================
+测试吞吐量: Sticky Session
+======================================================================
+并发数: 50, 持续时间: 10 秒
+✅ 设置了 50 个会话
+
+开始压测...
+  进度: 2/10 秒, 当前 QPS: 5243, 已提交: 10486
+  进度: 4/10 秒, 当前 QPS: 5180, 已提交: 20720
+  进度: 6/10 秒, 当前 QPS: 5210, 已提交: 31260
+  进度: 8/10 秒, 当前 QPS: 5195, 已提交: 41560
+  等待所有任务完成...
+
+结果:
+  持续时间: 10.02 秒
+  总请求数: 52050
+  成功: 52050, 失败: 0
+  成功率: 100.00%
+  QPS: 5194 请求/秒
+
+======================================================================
+对比汇总: THROUGHPUT
+======================================================================
+
+方案                 QPS             成功率          并发数
+-----------------------------------------------------------------
+Sticky Session       5194            100.00%         50
+Redis Session        3520            100.00%         50
+JWT Token            4850            100.00%         50
+
+推荐:
+  吞吐量最高: Sticky Session (QPS: 5194)
+```
+
+**如何解读**:
+- **QPS > 5000**: 性能优秀
+- **QPS 2000-5000**: 性能良好
+- **QPS < 1000**: 可能有性能瓶颈
+
+**差异原因分析**:
+- **Sticky Session 最高**: 无网络 I/O，纯内存操作
+- **Redis Session 最低**: Redis I/O 是瓶颈
+- **JWT Token 较高**: 只需 CPU 验证签名，无 I/O
+
+##### 测试 3: 并发扩展性测试
+
+**目的**: 观察不同并发数下的性能变化
+
+```bash
+# 测试不同并发数 (10, 50, 100, 200)
+python performance_compare.py --test concurrency
+```
+
+**预期输出示例**:
+```
+======================================================================
+并发扩展性汇总: Sticky Session
+======================================================================
+并发数       QPS             成功率
+---------------------------------------------
+10           4850            100.00%
+50           5194            100.00%
+100          5380            100.00%
+200          5420            99.95%
+
+======================================================================
+并发扩展性汇总: Redis Session
+======================================================================
+并发数       QPS             成功率
+---------------------------------------------
+10           3200            100.00%
+50           3520            100.00%
+100          3650            100.00%
+200          3700            98.50%
+
+======================================================================
+并发扩展性汇总: JWT Token
+======================================================================
+并发数       QPS             成功率
+---------------------------------------------
+10           4500            100.00%
+50           4850            100.00%
+100          5050            100.00%
+200          5180            99.80%
+```
+
+**如何解读**:
+
+1. **线性扩展**: QPS 随并发数增加而增加
+   - 说明系统未达到瓶颈
+   - 可以继续增加并发
+
+2. **达到平台期**: QPS 不再明显增加
+   - 说明达到了系统瓶颈
+   - 进一步增加并发没有意义
+
+3. **成功率下降**: 高并发下错误率增加
+   - 说明系统过载
+   - 需要优化或水平扩展
+
+**观察重点**:
+- Sticky Session: 在并发 100 时达到峰值，说明本地内存访问已接近极限
+- Redis Session: 扩展性较差，瓶颈在 Redis 网络 I/O
+- JWT Token: 扩展性好，CPU 验证签名的性能瓶颈较高
+
+##### 测试 4: 自定义参数测试
+
+```bash
+# 只测试 Sticky Session 和 JWT Token
+python performance_compare.py --schemes sticky jwt --test latency
+
+# 更长时间的吞吐量测试
+python performance_compare.py --test throughput --duration 30 --concurrency 100
+
+# 更多请求的延迟测试
+python performance_compare.py --test latency --requests 1000
+```
+
+#### Step 5.3: 使用 Apache Bench (ab) 进行测试
+
+##### 安装 Apache Bench
+
+```bash
+# macOS
+brew install apache2
+
+# Ubuntu/Debian
+sudo apt-get install apache2-utils
+
+# 验证
+ab -V
+```
+
+##### 测试 Sticky Session
+
+```bash
+# 先登录获取 Cookie
+SESSION_ID=$(curl -s -c - -X POST http://localhost:8081/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"123456"}' \
+  | grep session_id | awk '{print $7}')
+
+echo "Session ID: $SESSION_ID"
+
+# 使用 ab 测试
+ab -n 10000 -c 100 -C "session_id=$SESSION_ID" http://localhost:8081/profile
+```
+
+**输出解读**:
+```
+Server Software:
+Server Hostname:        localhost
+Server Port:            8081
+
+Document Path:          /profile
+Document Length:        XXX bytes
+
+Concurrency Level:      100
+Time taken for tests:   1.923 seconds
+Complete requests:      10000
+Failed requests:        0
+Total transferred:      XXX bytes
+Requests per second:    5200.10 [#/sec] (mean)    ← QPS
+Time per request:       19.230 [ms] (mean)        ← 平均延迟
+Time per request:       0.192 [ms] (mean, across all concurrent requests)
+
+Percentage of the requests served within a certain time (ms)
+  50%    18        ← P50
+  66%    20
+  75%    21
+  80%    22
+  90%    25
+  95%    28        ← P95
+  98%    32
+  99%    35        ← P99
+ 100%    45 (longest request)
+```
+
+##### 测试 Redis Session
+
+```bash
+# 登录获取 Cookie
+SESSION_ID=$(curl -s -c - -X POST http://localhost:8091/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"123456"}' \
+  | grep sessionID | awk '{print $7}')
+
+# 测试
+ab -n 10000 -c 100 -C "sessionID=$SESSION_ID" http://localhost:8091/profile
+```
+
+##### 测试 JWT Token
+
+```bash
+# 登录获取 Token
+TOKEN=$(curl -s -X POST http://localhost:8010/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"123456"}' \
+  | jq -r '.token')
+
+echo "Token: ${TOKEN:0:50}..."
+
+# 测试
+ab -n 10000 -c 100 -H "Authorization: Bearer $TOKEN" http://localhost:8010/profile
+```
+
+#### Step 5.4: 高级测试场景
+
+##### 场景 1: 模拟真实流量模式
+
+**目的**: 模拟用户登录 → 多次访问 → 登出的真实流程
+
+```python
+# test_realistic_traffic.py
+import requests
+import time
+import random
+
+def simulate_user_session(scheme_url, num_requests=10):
+    """模拟一个用户会话"""
+    session = requests.Session()
+
+    # 1. 登录
+    resp = session.post(f"{scheme_url}/login",
+                       json={"username": f"user_{random.randint(1,1000)}",
+                             "password": "123456"})
+
+    if resp.status_code != 200:
+        return 0
+
+    # 2. 多次访问
+    success_count = 0
+    for i in range(num_requests):
+        resp = session.get(f"{scheme_url}/profile")
+        if resp.status_code == 200:
+            success_count += 1
+
+        # 模拟用户思考时间
+        time.sleep(random.uniform(0.1, 0.5))
+
+    return success_count
+
+# 模拟 100 个用户并发访问
+from concurrent.futures import ThreadPoolExecutor
+
+with ThreadPoolExecutor(max_workers=100) as executor:
+    futures = [executor.submit(simulate_user_session, "http://localhost:8081")
+               for _ in range(100)]
+
+    total_success = sum(f.result() for f in futures)
+    print(f"成功请求: {total_success}/1000")
+```
+
+##### 场景 2: 长时间稳定性测试
+
+**目的**: 测试长时间运行下的性能稳定性
+
+```bash
+# 运行 5 分钟的压测
+python performance_compare.py --test throughput --duration 300 --concurrency 50
+
+# 观察:
+# - QPS 是否稳定
+# - 错误率是否增加
+# - 内存是否泄漏 (使用 top/htop 监控)
+```
+
+##### 场景 3: Redis 连接池测试
+
+**目的**: 观察 Redis 连接池对性能的影响
+
+修改 Redis Session 服务器代码：
+
+```go
+// 增加连接池大小
+var rdb = redis.NewClient(&redis.Options{
+    Addr:         "localhost:6379",
+    PoolSize:     100,  // 从默认 10 增加到 100
+    MinIdleConns: 10,
+})
+```
+
+重新测试并对比 QPS 变化。
+
+#### Step 5.5: 性能测试结果记录
+
+将测试结果填入下表，方便对比分析：
+
+##### 延迟测试结果
+
+| 方案           | P50 (ms) | P95 (ms) | P99 (ms) | 平均 (ms) | 最大 (ms) |
+| -------------- | -------- | -------- | -------- | --------- | --------- |
+| Sticky Session | ____     | ____     | ____     | ____      | ____      |
+| Redis Session  | ____     | ____     | ____     | ____      | ____      |
+| JWT Token      | ____     | ____     | ____     | ____      | ____      |
+
+##### 吞吐量测试结果
+
+| 方案           | 并发数 | QPS    | 成功率 (%) | CPU 占用 (%) | 内存占用 (MB) |
+| -------------- | ------ | ------ | ---------- | ------------ | ------------- |
+| Sticky Session | 50     | ____   | ____       | ____         | ____          |
+| Redis Session  | 50     | ____   | ____       | ____         | ____          |
+| JWT Token      | 50     | ____   | ____       | ____         | ____          |
+
+##### 并发扩展性测试结果
+
+**Sticky Session**:
+
+| 并发数 | QPS  | 成功率 (%) | P99 延迟 (ms) |
+| ------ | ---- | ---------- | ------------- |
+| 10     | ____ | ____       | ____          |
+| 50     | ____ | ____       | ____          |
+| 100    | ____ | ____       | ____          |
+| 200    | ____ | ____       | ____          |
+
+**Redis Session**:
+
+| 并发数 | QPS  | 成功率 (%) | P99 延迟 (ms) |
+| ------ | ---- | ---------- | ------------- |
+| 10     | ____ | ____       | ____          |
+| 50     | ____ | ____       | ____          |
+| 100    | ____ | ____       | ____          |
+| 200    | ____ | ____       | ____          |
+
+**JWT Token**:
+
+| 并发数 | QPS  | 成功率 (%) | P99 延迟 (ms) |
+| ------ | ---- | ---------- | ------------- |
+| 10     | ____ | ____       | ____          |
+| 50     | ____ | ____       | ____          |
+| 100    | ____ | ____       | ____          |
+| 200    | ____ | ____       | ____          |
+
+#### Step 5.6: 性能分析与结论
+
+##### 预期性能排名
+
+**延迟 (越低越好)**:
+1. **JWT Token** (~1.2ms P50) - 只需验证签名，无 I/O
+2. **Sticky Session** (~1.5ms P50) - 本地内存访问
+3. **Redis Session** (~2.8ms P50) - Redis 网络 I/O
+
+**吞吐量 (越高越好)**:
+1. **Sticky Session** (~5200 QPS) - 纯内存操作
+2. **JWT Token** (~4850 QPS) - CPU 验证签名
+3. **Redis Session** (~3520 QPS) - Redis 网络 I/O 瓶颈
+
+##### 性能差异原因分析
+
+**Sticky Session 性能最高的原因**:
+- ✅ 本地内存访问，延迟极低 (~0.1ms)
+- ✅ 无网络 I/O
+- ✅ sync.Map 并发读取性能好
+- ❌ 但扩展性差，服务器宕机丢失 Session
+
+**Redis Session 性能相对较低的原因**:
+- ❌ 每次请求需要 Redis I/O (~1-2ms)
+- ❌ 网络延迟累积
+- ❌ Redis 连接池可能成为瓶颈
+- ✅ 但可扩展性强，高可用
+
+**JWT Token 性能中等的原因**:
+- ✅ 无存储访问，完全无状态
+- ✅ 只需 CPU 验证签名 (~0.3ms)
+- ❌ Token 体积大，网络传输开销
+- ✅ 扩展性最好，天然支持分布式
+
+##### 性能优化建议
+
+**Sticky Session**:
+- 使用更高效的哈希表 (如 `sync.Map` 已经很好)
+- 定期清理过期 Session
+- 考虑 Session 大小，避免存储大对象
+
+**Redis Session**:
+- 增加 Redis 连接池大小
+- 使用 Redis Cluster 提高吞吐量
+- 开启 Redis 持久化 (RDB/AOF)
+- 考虑使用本地缓存 (L1 Cache)
+
+**JWT Token**:
+- 减小 Token 体积 (只存储必要字段)
+- 使用更快的签名算法 (HS256 已经很快)
+- 考虑 Token 压缩
+
+#### Step 5.7: 故障排查
+
+##### 问题 1: QPS 远低于预期
+
+**可能原因**:
+- 服务器 CPU/内存不足
+- 网络延迟过高
+- 数据库/Redis 连接池不足
+
+**排查方法**:
+```bash
+# 查看 CPU 占用
+top -o cpu
+
+# 查看网络延迟
+ping localhost
+ping 127.0.0.1
+
+# 查看 Redis 连接数
+redis-cli
+CLIENT LIST | wc -l
+```
+
+##### 问题 2: 高并发下错误率增加
+
+**可能原因**:
+- 连接池耗尽
+- 超时设置过短
+- 服务器过载
+
+**排查方法**:
+```bash
+# 查看错误日志
+# 检查是否有 "connection refused" 或 "timeout" 错误
+
+# 增加连接池大小
+# 增加超时时间
+```
+
+##### 问题 3: 延迟不稳定
+
+**可能原因**:
+- GC 导致延迟尖刺
+- 网络抖动
+- 磁盘 I/O (如果有日志写入)
+
+**排查方法**:
+```bash
+# Go 程序开启 pprof
+import _ "net/http/pprof"
+
+# 访问 pprof
+go tool pprof http://localhost:6060/debug/pprof/heap
+```
 
 ---
 
@@ -1201,4 +1768,19 @@ docker run -d --name redis-sentinel redis:alpine --sentinel
 
 ---
 
+## 📚 相关文档
+
+- **[README.md](./README.md)** - 项目总览
+- **[SCRIPTS_README.md](./SCRIPTS_README.md)** - 批量管理脚本详细说明
+- **[PERFORMANCE_FIX_NOTES.md](./PERFORMANCE_FIX_NOTES.md)** - 性能脚本修复说明
+- **[sticky-session/README.md](./sticky-session/README.md)** - Sticky Session 实现细节
+- **[redis-session/README.md](./redis-session/README.md)** - Redis Session 实现细节
+- **[jwt-token/README.md](./jwt-token/README.md)** - JWT Token 实现细节
+
+---
+
 **实验愉快！动手实践是最好的学习方式！** 🎉
+
+---
+
+> **注**: 本文档整合了原 `QUICK_START.md` 和 `PERFORMANCE_TESTING_GUIDE.md` 的内容，提供从快速开始到深入性能测试的完整实验指南。
