@@ -75,7 +75,7 @@
 
 **1. Round Robin 与加权轮询**
 
-- [ ] 📄 阅读: [Load Balancing Algorithms](https://kemptechnologies.com/load-balancer/load-balancing-algorithms-techniques/) - Kemp 官方文档 -> 📝 [笔记](notes/week1/module2/负载均衡算法与技术.md)
+- [ ] 📄 阅读: [Load Balancing Algorithms](https://kemptechnologies.com/load-balancer/load-balancing-algorithms-techniques/) - Kemp 官方文档 -> 📝 [笔记](notes/week1/module2/load_blance_note.md)
 - [ ] 📄 阅读: [Weighted Round-Robin Scheduling](https://kb.linuxvirtualserver.org/wiki/Weighted_Round-Robin_Scheduling) - LVS Wiki
 - [ ] 💻 **代码阅读**: Nginx 源码中的加权轮询实现 [ngx_http_upstream_round_robin.c](https://github.com/nginx/nginx/blob/master/src/http/ngx_http_upstream_round_robin.c)
 - [ ] ✍️ **任务**: 手写 Round Robin 算法(Go),处理权重为 [5, 1, 1] 的情况,验证分配比例
