@@ -56,16 +56,16 @@
 
 **4. 会话状态管理**
 
-- [ ] 📄 阅读: [Session Management Strategies](https://stackoverflow.blog/2021/10/06/best-practices-for-authentication-and-authorization-for-rest-apis/)
-- [ ] 📄 阅读: [Sticky Sessions vs Session Replication](https://www.nginx.com/blog/nginx-plus-sticky-sessions/)
-- [ ] 📖 阅读 Redis 官方文档: [Session Store Pattern](https://redis.io/docs/manual/patterns/distributed-locks/)
-- [ ] ✍️ **任务**: 对比 Session Affinity、集中式 Session(Redis)、JWT Token 三种方案,列出场景选择决策树
+- [X] 📄 阅读: [Session Management Strategies](https://stackoverflow.blog/2021/10/06/best-practices-for-authentication-and-authorization-for-rest-apis/)
+- [X] 📄 阅读: [Sticky Sessions vs Session Replication](https://www.nginx.com/blog/nginx-plus-sticky-sessions/)
+- [X] 📖 阅读 Redis 官方文档: [Session Store Pattern](https://redis.io/docs/manual/patterns/distributed-locks/)
+- [X] ✍️ **任务**: 对比 Session Affinity、集中式 Session(Redis)、JWT Token 三种方案,列出场景选择决策树
 
 **深入研究**:
 
-- [ ] 📚 阅读 Nginx 架构设计: [Inside NGINX: How We Designed for Performance &amp; Scale](https://www.nginx.com/blog/inside-nginx-how-we-designed-for-performance-scale/)
-- [ ] 📚 阅读 HAProxy 文档: [HAProxy Configuration Manual](http://cbonte.github.io/haproxy-dconv/2.6/configuration.html) - 关注 balance 算法部分
-- [ ] 🔬 **实验**: 在本地启动 3 个后端服务,使用 Nginx 配置不同的负载均衡策略,观察流量分布
+- [X] 📚 阅读 Nginx 架构设计: [Inside NGINX: How We Designed for Performance &amp; Scale](https://www.nginx.com/blog/inside-nginx-how-we-designed-for-performance-scale/) -> 📝 [中文文档](./notes/week1/Inside-NGINX-Performance-Architecture.md)
+- [X] 📚 阅读 HAProxy 文档: [HAProxy Configuration Manual](http://cbonte.github.io/haproxy-dconv/2.6/configuration.html) - 关注 balance 算法部分
+- [X] 🔬 **实验**: 使用go写一个简单的事件循环 -> 💻 [代码目录](./projects/week1/nginx-event-loop/)
 
 **笔记路径**: `notes/week1/module1-scalability.md`
 
