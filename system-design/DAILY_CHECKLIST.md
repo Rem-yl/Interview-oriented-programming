@@ -36,9 +36,9 @@
 - [X] 📖 阅读《Designing Data-Intensive Applications》Chapter 1 → 📝 [笔记](notes/resources/books/DDIA/Ch01_scalability.md)
 - [X] 📺 观看视频: [Horizontal vs Vertical Scaling](https://www.youtube.com/watch?v=xpDnVSmNFX0) (15分钟)
 - [X] 📄 阅读文章: [Scalability for Dummies](https://www.lecloud.net/post/7295452622/scalability-for-dummies-part-1-clones) - 4篇系列文章
-- [X] ✍️ **任务**: 列表对比垂直扩展与水平扩展 → 📝 [对比表格](notes/week1/module1-scalability.md#垂直扩展-vs-水平扩展对比)
+- [X] ✍️ **任务**: 列表对比垂直扩展与水平扩展 → 📝 [对比表格](notes/resources/books/DDIA/Ch01_scalability.md)
 
-**2. CAP 定理初探**
+**2. CAP 定理初探** -> 📝 [笔记](notes/resources/books/DDIA/ch09_note_and_question.md)
 
 - [X] 📖 阅读《DDIA》Chapter 9: Consistency and Consensus → 📝 [笔记](notes/resources/books/DDIA/Ch09_一致性与共识.md)
 - [X] 📄 阅读论文: [CAP Twelve Years Later](https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/) → 📝 [笔记](notes/resources/papers/CAP-Twelve-Years-Later.md)
@@ -47,14 +47,14 @@
   - 核心理解: 分区不可避免，节点无法确定其他节点状态（网络故障 vs 崩溃）
   - ATM 案例: 保证可用性会导致不一致；保证一致性要拒绝服务
 
-**3. 无状态服务设计** -> 📝 [笔记](notes/week1/module1-3-stateless-service.md)
+**3. 无状态服务设计** -> 📝 [笔记](notes/week1/module1/module1-3-stateless-service.md)
 
 - [X] 📄 阅读: [The Twelve-Factor App](https://12factor.net/) - 特别关注 VI. Processes 章节
 - [X] 📄 阅读: [Stateless vs Stateful Services](https://medium.com/@maniakhitoccori/stateless-vs-stateful-architecture-63194d749c08)
 - [X] 📺 观看: [Stateless Architecture](https://www.youtube.com/watch?v=20tpk8A_xa0&t=14s) (10分钟)
 - [X] ✍️ **任务**: 设计一个无状态的用户认证系统架构图
 
-**4. 会话状态管理**
+**4. 会话状态管理** -> 📝 [笔记](notes/week1/module1/module1-4-session-management.md)
 
 - [X] 📄 阅读: [Session Management Strategies](https://stackoverflow.blog/2021/10/06/best-practices-for-authentication-and-authorization-for-rest-apis/)
 - [X] 📄 阅读: [Sticky Sessions vs Session Replication](https://www.nginx.com/blog/nginx-plus-sticky-sessions/)
@@ -63,15 +63,9 @@
 
 **深入研究**:
 
-- [X] 📚 阅读 Nginx 架构设计: [Inside NGINX: How We Designed for Performance &amp; Scale](https://www.nginx.com/blog/inside-nginx-how-we-designed-for-performance-scale/) -> 📝 [中文文档](./notes/week1/Inside-NGINX-Performance-Architecture.md)
+- [X] 📚 阅读 Nginx 架构设计: [Inside NGINX: How We Designed for Performance &amp; Scale](https://www.nginx.com/blog/inside-nginx-how-we-designed-for-performance-scale/) -> 📝 [中文文档](./notes/week1/module1/Inside-NGINX-Performance-Architecture.md)
 - [X] 📚 阅读 HAProxy 文档: [HAProxy Configuration Manual](http://cbonte.github.io/haproxy-dconv/2.6/configuration.html) - 关注 balance 算法部分
-- [X] 🔬 **实验**: 使用go写一个简单的事件循环 -> 💻 [代码目录](./projects/week1/nginx-event-loop/)
-
-**笔记路径**: `notes/week1/module1-scalability.md`
-
-**学习时长**: _____ 小时
-**关键收获**: _____________________
-**待深入**: _____________________
+- [X] 🔬 **实验**: 使用go写一个简单的事件循环 -> 💻 [代码目录](./projects/week1/module1/nginx-event-loop/)
 
 ---
 
@@ -81,7 +75,7 @@
 
 **1. Round Robin 与加权轮询**
 
-- [ ] 📄 阅读: [Load Balancing Algorithms](https://kemptechnologies.com/load-balancer/load-balancing-algorithms-techniques/) - Kemp 官方文档
+- [ ] 📄 阅读: [Load Balancing Algorithms](https://kemptechnologies.com/load-balancer/load-balancing-algorithms-techniques/) - Kemp 官方文档 -> 📝 [笔记](notes/week1/module2/负载均衡算法与技术.md)
 - [ ] 📄 阅读: [Weighted Round-Robin Scheduling](https://kb.linuxvirtualserver.org/wiki/Weighted_Round-Robin_Scheduling) - LVS Wiki
 - [ ] 💻 **代码阅读**: Nginx 源码中的加权轮询实现 [ngx_http_upstream_round_robin.c](https://github.com/nginx/nginx/blob/master/src/http/ngx_http_upstream_round_robin.c)
 - [ ] ✍️ **任务**: 手写 Round Robin 算法(Go),处理权重为 [5, 1, 1] 的情况,验证分配比例
