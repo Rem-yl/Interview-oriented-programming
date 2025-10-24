@@ -155,6 +155,82 @@ func (b *GcdWeightedRoundRobinBalancer) GetServer() (*Server, error) {
 	}
 }
 
+// *************************************************** //
+// ********** SwrrWeightedRoundRobinBalancer ********* //
+// *************************************************** //
+type SwrrWeightedRoundRobinBalancer struct {
+	serverList  []*SwrrServer
+	curIdx      int
+	mu          sync.Mutex
+	totalWeight int
+}
+
+type SwrrServer struct {
+	Server
+	curWeight int
+}
+
+func (b *SwrrWeightedRoundRobinBalancer) build_balancer() {
+	if len(b.serverList) <= 0 {
+		return
+	}
+
+	totalWeight := 0
+
+	for _, server := range b.serverList {
+		totalWeight += server.weight
+		server.curWeight = 0
+	}
+
+	b.totalWeight = totalWeight
+}
+
+func NewSwrrWeightedRoundRobinBalancer(serverList []*Server) *SwrrWeightedRoundRobinBalancer {
+	swrrServerList := make([]*SwrrServer, 0)
+	for _, server := range serverList {
+		swrrServer := &SwrrServer{
+			Server:    *server,
+			curWeight: 0,
+		}
+		swrrServerList = append(swrrServerList, swrrServer)
+	}
+
+	balancer := &SwrrWeightedRoundRobinBalancer{
+		serverList:  swrrServerList,
+		curIdx:      0,
+		totalWeight: 0,
+	}
+
+	balancer.build_balancer()
+
+	return balancer
+}
+
+func (b *SwrrWeightedRoundRobinBalancer) GetServer() (*Server, error) {
+	if len(b.serverList) <= 0 {
+		return nil, errors.New("no server in list")
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	selectServer := b.serverList[0]
+
+	for _, swrrServer := range b.serverList {
+		swrrServer.curWeight += swrrServer.weight
+	}
+
+	for _, swrrServer := range b.serverList {
+		if swrrServer.curWeight > selectServer.curWeight {
+			selectServer = swrrServer
+		}
+	}
+
+	selectServer.curWeight -= b.totalWeight
+
+	return &selectServer.Server, nil
+}
+
 func testNaiveBalancer() {
 	serverList := creatServerList(20)
 	var balancer Balancer
@@ -210,7 +286,38 @@ func testGcdBalancer() {
 	fmt.Println("Done.")
 }
 
+func testSwrrBalancer() {
+	serverList := []*Server{
+		{Name: "A", URL: "1", weight: 2},
+		{Name: "B", URL: "2", weight: 5},
+		{Name: "C", URL: "3", weight: 1},
+	}
+
+	var balancer Balancer
+	balancer = NewSwrrWeightedRoundRobinBalancer(serverList)
+	fmt.Println("============================")
+	fmt.Println("Server list: ")
+
+	for _, server := range serverList {
+		fmt.Printf("Name: %s, URL: %s, weight: %d \n", server.Name, server.URL, server.weight)
+	}
+	fmt.Println("============================")
+	fmt.Println("Start Round Robin")
+	for i := range 50 {
+		server, err := balancer.GetServer()
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("Round: %d, Name: %s, URL: %s \n", i, server.Name, server.URL)
+	}
+
+	fmt.Println("============================")
+	fmt.Println("Done.")
+}
+
 func main() {
 	testNaiveBalancer()
 	testGcdBalancer()
+	testSwrrBalancer()
 }
