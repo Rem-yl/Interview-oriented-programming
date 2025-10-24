@@ -281,34 +281,214 @@ Server-3: 2 请求   (2/14 ≈ 14.3%)
 */
 ```
 
-**算法详解**：
+**算法详解 - GCD 权重轮换法**：
 
-1. **权重计算**：
-   - 计算所有权重的最大公约数（GCD）：`gcd(5, 1, 1) = 1`
-   - 找出最大权重：`max(5, 1, 1) = 5`
+#### 为什么需要 GCD（最大公约数）？
 
-2. **选择逻辑**：
-   ```
-   currentWeight 从 maxWeight(5) 开始
+GCD 的作用是找到一个**递减步长**，让算法能够平滑地遍历不同权重等级。
 
-   Round 1 (currentWeight=5):
-     Server-1 (weight=5) >= 5 ✓ → 选择 5 次
-     Server-2 (weight=1) >= 5 ✗
-     Server-3 (weight=1) >= 5 ✗
+**示例**：
+- 权重 `[5, 1, 1]` 的 GCD = 1（步长为 1，精细递减）
+- 权重 `[10, 5, 5]` 的 GCD = 5（步长为 5，跳跃递减，减少无效遍历）
 
-   Round 2 (currentWeight=4):
-     Server-1 (weight=5) >= 4 ✓ → 选择
+#### 核心变量说明
 
-   ...依此类推
-   ```
+```go
+currentWeight  // 当前权重阈值（从 maxWeight 开始，逐步递减）
+currentIndex   // 当前检查的服务器索引
+maxWeight      // 所有服务器中的最大权重
+gcdWeight      // 所有权重的最大公约数（递减步长）
+```
 
-3. **时间复杂度**：O(1) 均摊
-4. **空间复杂度**：O(1)
+#### 算法执行流程图
 
-**关键要点**：
-- 使用 GCD 和权重轮换实现平滑分配
-- 高权重服务器获得更多请求（比例 = 权重比例）
-- 避免"突发"分配（不是先给 Server-1 所有请求，再给 Server-2）
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   开始处理请求                               │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+                ┌──────────────────────┐
+                │ currentIndex++       │
+                │ (移动到下一个服务器)  │
+                └──────────────────────┘
+                            ↓
+                    currentIndex 回到 0？
+                    ┌─────┴─────┐
+                   是│          │否
+                    ↓            ↓
+        ┌─────────────────┐     跳过
+        │ currentWeight   │
+        │    -= gcdWeight │
+        └─────────────────┘
+                    ↓
+            currentWeight <= 0？
+            ┌─────┴─────┐
+           是│          │否
+            ↓            ↓
+┌─────────────────────┐  跳过
+│ currentWeight =     │
+│    maxWeight        │
+└─────────────────────┘
+            │
+            └──────────┬────────────┘
+                       ↓
+        ┌────────────────────────────────┐
+        │ 检查：                          │
+        │ servers[currentIndex].Weight   │
+        │    >= currentWeight？          │
+        └────────────────────────────────┘
+                ┌─────┴─────┐
+               是│          │否
+                ↓            ↓
+        ┌──────────────┐  ┌──────────┐
+        │ 返回该服务器  │  │ 继续循环  │
+        └──────────────┘  └──────────┘
+```
+
+#### 详细执行过程（权重 5:1:1）
+
+**初始状态**：
+```
+servers: [Server-1(weight=5), Server-2(weight=1), Server-3(weight=1)]
+maxWeight = 5
+gcdWeight = 1
+currentWeight = 0 (初始)
+currentIndex = 0 (初始)
+```
+
+**请求 #1-#7 的详细过程**：
+
+| 请求 | 初始 currentIndex | 初始 currentWeight | 动作 | currentIndex 回到 0？ | 调整 currentWeight | 匹配检查 | 选中服务器 | 最终状态 |
+|------|------------------|-------------------|------|---------------------|-------------------|---------|-----------|---------|
+| #1 | 0 | 0 | index++ → 1 | 否 | - | 1>=0? 否 | 继续 | - |
+|    | 1 | 0 | index++ → 2 | 否 | - | 1>=0? 否 | 继续 | - |
+|    | 2 | 0 | index++ → 0 | **是** | **0-1→-1→5** | 1>=5? 否 | 继续 | - |
+|    | 0 | 5 | - | - | - | **5>=5? 是** | **Server-1** | currentWeight=5, index=0 |
+| #2 | 0 | 5 | index++ → 1 | 否 | - | 1>=5? 否 | 继续 | - |
+|    | 1 | 5 | index++ → 2 | 否 | - | 1>=5? 否 | 继续 | - |
+|    | 2 | 5 | index++ → 0 | **是** | **5-1→4** | 5>=4? 是 | **Server-1** | currentWeight=4, index=0 |
+| #3 | 0 | 4 | index++ → 1 | 否 | - | 1>=4? 否 | 继续 | - |
+|    | 1 | 4 | index++ → 2 | 否 | - | 1>=4? 否 | 继续 | - |
+|    | 2 | 4 | index++ → 0 | **是** | **4-1→3** | 5>=3? 是 | **Server-1** | currentWeight=3, index=0 |
+| #4 | 0 | 3 | index++ → 1 | 否 | - | 1>=3? 否 | 继续 | - |
+|    | 1 | 3 | index++ → 2 | 否 | - | 1>=3? 否 | 继续 | - |
+|    | 2 | 3 | index++ → 0 | **是** | **3-1→2** | 5>=2? 是 | **Server-1** | currentWeight=2, index=0 |
+| #5 | 0 | 2 | index++ → 1 | 否 | - | 1>=2? 否 | 继续 | - |
+|    | 1 | 2 | index++ → 2 | 否 | - | 1>=2? 否 | 继续 | - |
+|    | 2 | 2 | index++ → 0 | **是** | **2-1→1** | 5>=1? 是 | **Server-1** | currentWeight=1, index=0 |
+| #6 | 0 | 1 | index++ → 1 | 否 | - | **1>=1? 是** | **Server-2** | currentWeight=1, index=1 |
+| #7 | 1 | 1 | index++ → 2 | 否 | - | **1>=1? 是** | **Server-3** | currentWeight=1, index=2 |
+
+**周期性规律**：
+```
+currentWeight: 5 → 4 → 3 → 2 → 1 → 5 → 4 → 3 → 2 → 1 → ...
+                    └──────循环周期─────┘
+```
+
+#### 为什么能实现按权重分配？
+
+**关键洞察**：
+- `currentWeight = 5` 时：只有 Server-1 (weight=5) 满足 `5 >= 5`
+- `currentWeight = 4` 时：只有 Server-1 (weight=5) 满足 `5 >= 4`
+- `currentWeight = 3` 时：只有 Server-1 (weight=5) 满足 `5 >= 3`
+- `currentWeight = 2` 时：只有 Server-1 (weight=5) 满足 `5 >= 2`
+- `currentWeight = 1` 时：**所有服务器**都满足条件 (5>=1, 1>=1, 1>=1)
+
+因此，每个周期（currentWeight 从 5 降到 1）：
+- Server-1 被选中 5 次（在 currentWeight = 5,4,3,2,1 时）
+- Server-2 被选中 1 次（在 currentWeight = 1 时）
+- Server-3 被选中 1 次（在 currentWeight = 1 时）
+
+**比例**：5:1:1 ✓
+
+#### 代码关键部分解析
+
+```go
+func (wrb *WeightedRoundRobinBalancer) NextServer() *WeightedServer {
+    wrb.mu.Lock()
+    defer wrb.mu.Unlock()
+
+    for {
+        // 1️⃣ 移动到下一个服务器
+        wrb.currentIndex = (wrb.currentIndex + 1) % len(wrb.servers)
+
+        // 2️⃣ 如果回到第一个服务器，降低权重阈值
+        if wrb.currentIndex == 0 {
+            wrb.currentWeight = wrb.currentWeight - wrb.gcdWeight
+
+            // 3️⃣ 如果权重降到 0 或更低，重置为最大值
+            if wrb.currentWeight <= 0 {
+                wrb.currentWeight = wrb.maxWeight
+            }
+        }
+
+        // 4️⃣ 检查当前服务器的权重是否满足阈值
+        if wrb.servers[wrb.currentIndex].Weight >= wrb.currentWeight {
+            return wrb.servers[wrb.currentIndex]  // 找到了！
+        }
+
+        // 5️⃣ 不满足则继续循环
+    }
+}
+```
+
+**为什么需要 `for` 循环？**
+- 因为不是每个服务器都满足 `weight >= currentWeight`
+- 需要遍历直到找到满足条件的服务器
+
+**示例**：
+```
+currentWeight = 5
+  检查 Server-1 (weight=5): 5 >= 5 ✓ 返回
+
+currentWeight = 4
+  检查 Server-1 (weight=5): 5 >= 4 ✓ 返回
+
+currentWeight = 1
+  检查 Server-1 (weight=5): 5 >= 1 ✓ 返回
+  或
+  检查 Server-2 (weight=1): 1 >= 1 ✓ 返回
+  或
+  检查 Server-3 (weight=1): 1 >= 1 ✓ 返回
+```
+
+#### 时间复杂度分析
+
+**最坏情况**：
+- 遍历所有服务器才找到满足条件的：O(n)
+- 例如：currentWeight = 1，前面的服务器都是 weight = 0
+
+**平均情况**：
+- 大多数情况下很快找到：O(1) 均摊
+- 因为高权重服务器在高 currentWeight 时就会被选中
+
+**空间复杂度**：O(1)（只用了几个变量）
+
+#### 优缺点总结
+
+**优点**：
+- ✅ 不需要扩展列表（节省内存）
+- ✅ 支持大权重值（如 1000:1）
+- ✅ 实现相对简洁
+
+**缺点**：
+- ❌ 仍然不够平滑（连续选择同一台服务器）
+- ❌ 需要理解 GCD 概念（算法复杂度较高）
+- ❌ 有无效遍历（需要循环查找）
+
+**输出模式**：
+```
+权重 5:1:1
+输出: A A A A A B C | A A A A A B C | ...
+      └─ 连续 5 个 A ─┘
+      ↑ 不平滑！
+```
+
+对比 NGINX 平滑版本（版本3）：
+```
+输出: A A B A C A A | A A B A C A A | ...
+      ↑ B 和 C 穿插在 A 之间，平滑！
+```
 
 ---
 
