@@ -75,16 +75,16 @@
 
 **1. Round Robin 与加权轮询**
 
-- [ ] 📄 阅读: [Load Balancing Algorithms](https://kemptechnologies.com/load-balancer/load-balancing-algorithms-techniques/) - Kemp 官方文档 -> 📝 [笔记](notes/week1/module2/load_blance_note.md)
-- [ ] 📄 阅读: [Weighted Round-Robin Scheduling](https://kb.linuxvirtualserver.org/wiki/Weighted_Round-Robin_Scheduling) - LVS Wiki
-- [ ] 💻 **代码阅读**: Nginx 源码中的加权轮询实现 [ngx_http_upstream_round_robin.c](https://github.com/nginx/nginx/blob/master/src/http/ngx_http_upstream_round_robin.c)
-- [ ] ✍️ **任务**: 手写 Round Robin 算法(Go),处理权重为 [5, 1, 1] 的情况,验证分配比例
+- [X] 📄 阅读: [Load Balancing Algorithms](https://kemptechnologies.com/load-balancer/load-balancing-algorithms-techniques/) - Kemp 官方文档 -> 📝 [笔记](notes/week1/module2/load_blance_note.md)
+- [X] 📄 阅读: [Weighted Round-Robin Scheduling](https://kb.linuxvirtualserver.org/wiki/Weighted_Round-Robin_Scheduling) - LVS Wiki
+- [X] 💻 **代码阅读**: Nginx 源码中的加权轮询实现 [ngx_http_upstream_round_robin.c](https://github.com/nginx/nginx/blob/master/src/http/ngx_http_upstream_round_robin.c)
+- [X] ✍️ **任务**: 手写 Round Robin 算法(Go),处理权重为 [5, 1, 1] 的情况,验证分配比例
 
 **2. 最少连接与最快响应**
 
-- [ ] 📄 阅读: [Least Connections Load Balancing](https://www.nginx.com/blog/choosing-nginx-plus-load-balancing-techniques/)
-- [ ] 📄 阅读: [Dynamic Load Balancing Algorithms](https://www.haproxy.com/blog/haproxy-load-balancing-algorithms/)
-- [ ] ✍️ **任务**: 对比静态算法(RR)与动态算法(Least Conn)的适用场景,绘制决策树
+- [X] 📄 阅读: [Least Connections Load Balancing](https://www.nginx.com/blog/choosing-nginx-plus-load-balancing-techniques/)
+- [X] 📄 阅读: [Dynamic Load Balancing Algorithms](https://www.haproxy.com/blog/haproxy-load-balancing-algorithms/)
+- [X] ✍️ **任务**: 对比静态算法(RR)与动态算法(Least Conn)的适用场景,绘制决策树
 
 **3. 一致性哈希算法**
 
