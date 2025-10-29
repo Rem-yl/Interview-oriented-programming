@@ -94,23 +94,23 @@
 - [X] 📄 阅读经典论文: [Consistent Hashing and Random Trees](https://www.akamai.com/us/en/multimedia/documents/technical-publication/consistent-hashing-and-random-trees-distributed-caching-protocols-for-relieving-hot-spots-on-the-world-wide-web-technical-publication.pdf) (Karger et al.)
 - [X] 📺 观看视频: [Consistent Hashing Explained](https://www.youtube.com/watch?v=zaRkONvyGr8) (12分钟)
 - [X] 📄 阅读: [Consistent Hashing in Practice](https://www.toptal.com/big-data/consistent-hashing)
-- [ ] ✍️ **任务**:
+- [X] ✍️ **任务**:
   - 手写一致性哈希实现,计算 100 个节点,每个节点 150 个虚拟节点的哈希环
   - 模拟节点上下线,计算数据迁移比例(理论值应接近 1/N)
   - 绘制哈希环可视化图
 
-**4. 健康检查机制**
+**4. 健康检查机制** -> 📝 [笔记](./notes/week1/module2/健康检查机制深度解析.md)
 
-- [ ] 📄 阅读: [Health Checks in Load Balancing](https://docs.nginx.com/nginx/admin-guide/load-balancer/http-health-check/)
-- [ ] 📄 阅读 HAProxy 文档: [Health Check](https://www.haproxy.com/documentation/hapee/latest/load-balancing/health-checking/active-health-checks/)
-- [ ] 📄 阅读: [Passive vs Active Health Checks](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/health_checking)
+- [X] 📄 阅读: [Health Checks in Load Balancing](https://docs.nginx.com/nginx/admin-guide/load-balancer/http-health-check/)
+- [X] 📄 阅读 HAProxy 文档: [Health Check](https://www.haproxy.com/documentation/hapee/latest/load-balancing/health-checking/active-health-checks/)
+- [X] 📄 阅读: [Passive vs Active Health Checks](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/health_checking)
 - [ ] ✍️ **任务**: 设计主动健康检查(HTTP /health)和被动健康检查(错误率统计)的组合策略
 
 **5. 故障检测与自动转移**
 
-- [ ] 📄 阅读: [Circuit Breaker Pattern](https://martinfowler.com/bliki/CircuitBreaker.html) - Martin Fowler
-- [ ] 📄 阅读: [Failure Detection in Distributed Systems](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-2007-153.pdf)
-- [ ] ✍️ **任务**: 设计故障检测算法,定义"不健康"的判定标准(连续失败次数、成功率阈值)
+- [X] 📄 阅读: [Circuit Breaker Pattern](https://martinfowler.com/bliki/CircuitBreaker.html) - Martin Fowler
+- [X] 📄 阅读: [Failure Detection in Distributed Systems](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-2007-153.pdf)
+- [X] ✍️ **任务**: 设计故障检测算法,定义"不健康"的判定标准(连续失败次数、成功率阈值)
 
 **实战项目**: Go 实现生产级负载均衡器
 
