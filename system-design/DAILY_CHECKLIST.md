@@ -88,10 +88,12 @@
 
 **3. 一致性哈希算法**
 
-- [ ] 📖 阅读《DDIA》Chapter 6: Partitioning (第6章 - 分区部分)
-- [ ] 📄 阅读经典论文: [Consistent Hashing and Random Trees](https://www.akamai.com/us/en/multimedia/documents/technical-publication/consistent-hashing-and-random-trees-distributed-caching-protocols-for-relieving-hot-spots-on-the-world-wide-web-technical-publication.pdf) (Karger et al.)
-- [ ] 📺 观看视频: [Consistent Hashing Explained](https://www.youtube.com/watch?v=zaRkONvyGr8) (12分钟)
-- [ ] 📄 阅读: [Consistent Hashing in Practice](https://www.toptal.com/big-data/consistent-hashing)
+用于解决分布式节点扩缩容时的数据迁移问题。
+
+- [X] 📖 阅读《DDIA》Chapter 6: Partitioning (第6章 - 分区部分) -> [笔记](./notes/resources/books/DDIA/Ch06_数据分区.md)
+- [X] 📄 阅读经典论文: [Consistent Hashing and Random Trees](https://www.akamai.com/us/en/multimedia/documents/technical-publication/consistent-hashing-and-random-trees-distributed-caching-protocols-for-relieving-hot-spots-on-the-world-wide-web-technical-publication.pdf) (Karger et al.)
+- [X] 📺 观看视频: [Consistent Hashing Explained](https://www.youtube.com/watch?v=zaRkONvyGr8) (12分钟)
+- [X] 📄 阅读: [Consistent Hashing in Practice](https://www.toptal.com/big-data/consistent-hashing)
 - [ ] ✍️ **任务**:
   - 手写一致性哈希实现,计算 100 个节点,每个节点 150 个虚拟节点的哈希环
   - 模拟节点上下线,计算数据迁移比例(理论值应接近 1/N)
