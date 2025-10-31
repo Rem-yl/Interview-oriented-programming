@@ -1,10 +1,10 @@
 package algo
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/rem/load-balancer/pkg/backend"
+	"github.com/rem/load-balancer/pkg/errs"
 )
 
 type RoundRobinLoadBalancer struct {
@@ -17,7 +17,7 @@ func (b *RoundRobinLoadBalancer) GetBackEnd() (backend.BackEnd, error) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	if len(b.serverList) <= 0 {
-		return nil, errors.New("No server list!")
+		return nil, errs.ErrNoServerList
 	}
 
 	backend := b.serverList[b.idx]

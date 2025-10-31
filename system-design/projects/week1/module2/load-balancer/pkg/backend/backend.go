@@ -1,8 +1,8 @@
 package backend
 
 type SimpleBackEnd struct {
-	URL  string
-	Name string
+	URL  string `yaml:"url"`
+	Name string `yaml:"name"`
 }
 
 func (b *SimpleBackEnd) GetURL() string {
@@ -11,11 +11,4 @@ func (b *SimpleBackEnd) GetURL() string {
 
 func (b *SimpleBackEnd) GetName() string {
 	return b.Name
-}
-
-func NewSimpleBackEnd(URL, Name string) *SimpleBackEnd {
-	return &SimpleBackEnd{
-		URL:  URL,
-		Name: Name,
-	}
 }

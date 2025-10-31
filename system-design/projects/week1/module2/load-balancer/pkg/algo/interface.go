@@ -5,5 +5,5 @@ import (
 )
 
 type LoadBalanceAlgo interface {
-	GetBackEnd() (*backend.BackEnd, error)
+	GetBackEnd() (backend.BackEnd, error)
 }

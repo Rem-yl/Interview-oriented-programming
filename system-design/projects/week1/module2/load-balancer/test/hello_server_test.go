@@ -7,5 +7,5 @@ import (
 )
 
 func TestHelloServer(t *testing.T) {
-	server.HelloServer()
+	server.HelloServer("8089")
 }
