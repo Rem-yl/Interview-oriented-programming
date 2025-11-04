@@ -1,6 +1,10 @@
-- name: rem1
-  url: http://127.0.0.1:8180
-- name: rem2
-  url: http://127.0.0.1:8181
-- name: rem3
-  url: http://127.0.0.1:8182
+load_balancer:
+  url: 127.0.0.1:8189
+
+server:
+  - name: rem1
+    url: http://127.0.0.1:8180
+  - name: rem2
+    url: http://127.0.0.1:8181
+  - name: rem3
+    url: http://127.0.0.1:8182

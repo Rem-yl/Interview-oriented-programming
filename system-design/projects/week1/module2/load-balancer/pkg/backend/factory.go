@@ -1,8 +1,8 @@
 package backend
 
 import (
-	"io/ioutil"
 	"log"
+	"os"
 
 	"github.com/goccy/go-yaml"
 )
@@ -15,7 +15,7 @@ func NewSimpleBackEnd(URL, Name string) *SimpleBackEnd {
 }
 
 func NewSimpleBackEndFromYaml(path string) []*SimpleBackEnd {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatalf("failed to read file: %v", err)
 	}
