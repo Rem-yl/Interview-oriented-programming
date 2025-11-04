@@ -1,8 +1,8 @@
 package backend
 
 type SimpleBackEnd struct {
-	URL  string `yaml:"url"`
-	Name string `yaml:"name"`
+	URL  string `yaml:"url" json:"url"`
+	Name string `yaml:"name" json:"name"`
 }
 
 func (b *SimpleBackEnd) GetURL() string {

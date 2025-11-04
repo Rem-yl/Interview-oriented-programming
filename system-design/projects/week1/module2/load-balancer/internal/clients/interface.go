@@ -1,4 +1,4 @@
-package client
+package clients
 
 type HttpClient interface {
 	Get(url string) ([]byte, error)
