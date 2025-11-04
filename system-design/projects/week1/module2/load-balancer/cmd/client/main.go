@@ -23,7 +23,7 @@ type HelloResponse struct {
 	Data string `json:"data"`
 }
 
-func main() {
+func useDefaultHttpClient() {
 	client := client.NewDefaultHttpClient(5 * time.Second)
 	url := "127.0.0.1"
 	port := "8187"
@@ -62,4 +62,39 @@ func main() {
 	}
 
 	fmt.Println("data: ", hResp.Data)
+}
+
+func useLoadBalanceClient() {
+	url := "127.0.0.1"
+	port := "8187"
+	addr := fmt.Sprintf("http://%s:%s/balancer", url, port)
+
+	httpClient := client.NewDefaultHttpClient(5 * time.Second)
+	loadBalanceClient := client.NewLoadBalanceClient(addr, 5*time.Second)
+
+	backend, err := loadBalanceClient.GetBackend()
+	if err != nil {
+		fmt.Println("获取后端链接失败: ", err)
+		return
+	}
+
+	body, err := httpClient.Get(backend.GetURL())
+	if err != nil {
+		fmt.Println("请求失败:", err)
+		return
+	}
+
+	var hResp HelloResponse
+	if err := json.Unmarshal(body, &hResp); err != nil {
+		fmt.Println("JSON 解析失败:", err)
+		fmt.Println("原始响应:", string(body))
+		return
+	}
+
+	fmt.Println("data: ", hResp.Data)
+
+}
+func main() {
+	// useDefaultHttpClient()
+	useLoadBalanceClient()
 }
