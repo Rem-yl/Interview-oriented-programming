@@ -174,35 +174,35 @@
 
 **1. QPS vs TPS**
 
-- [ ] 📄 阅读: [Understanding QPS, TPS, and Throughput](https://aws.amazon.com/builders-library/using-load-testing-to-ensure-that-your-service-can-scale/)
-- [ ] 📄 阅读: [Performance Metrics Explained](https://www.brendangregg.com/usemethod.html) - Brendan Gregg
-- [ ] ✍️ **任务**:
+- [X] 📄 阅读: [Understanding QPS, TPS, and Throughput](https://aws.amazon.com/builders-library/using-load-testing-to-ensure-that-your-service-can-scale/)
+- [X] 📄 阅读: [Performance Metrics Explained](https://www.brendangregg.com/usemethod.html) - Brendan Gregg
+- [X] ✍️ **任务**:
   - 计算一个电商系统的 QPS:假设 100 万 DAU,每个用户平均每天 20 个请求,峰值流量是平均值的 3 倍
   - 公式:峰值 QPS = (DAU × 请求数 / 86400) × 峰值因子
 
 **2. Latency 分析(P50、P95、P99)**
 
-- [ ] 📖 阅读《Site Reliability Engineering》Chapter 4: Service Level Objectives
-- [ ] 📄 阅读: [Percentile Latency - What it means](https://www.elastic.co/blog/averages-can-dangerous-use-percentile)
-- [ ] 📺 观看视频: [Understanding Latency Percentiles](https://www.youtube.com/watch?v=lJ8ydIuPFeU) (15分钟)
-- [ ] ✍️ **任务**:
+- [X] 📖 阅读《Site Reliability Engineering》Chapter 4: Service Level Objectives
+- [X] 📄 阅读: [Percentile Latency - What it means](https://www.elastic.co/blog/averages-can-dangerous-use-percentile)
+- [X] 📺 观看视频: [Understanding Latency Percentiles](https://www.youtube.com/watch?v=lJ8ydIuPFeU) (15分钟)
+- [X] ✍️ **任务**:
   - 给定延迟数据:[1ms, 2ms, 3ms, ..., 100ms],手工计算 P50、P95、P99
   - 解释为什么 P99 比平均值更重要
 
 **3. Throughput 与带宽估算**
 
-- [ ] 📄 阅读: [Back-of-the-envelope Calculations](https://github.com/donnemartin/system-design-primer#back-of-the-envelope-calculations)
-- [ ] 📄 阅读: [Numbers Every Programmer Should Know](https://gist.github.com/jboner/2841832)
-- [ ] ✍️ **任务**:
+- [X] 📄 阅读: [Back-of-the-envelope Calculations](https://github.com/donnemartin/system-design-primer#back-of-the-envelope-calculations)
+- [X] 📄 阅读: [Numbers Every Programmer Should Know](https://gist.github.com/jboner/2841832)
+- [X] ✍️ **任务**:
   - 背诵常用数字:L1 cache (0.5ns), 内存访问(100ns), SSD 读(16μs), 网络往返(0.5ms)
   - 计算:1 Gbps 带宽每秒能传输多少 1MB 的图片?
 
 **4. Little's Law**
 
-- [ ] 📖 阅读《DDIA》Appendix: Little's Law
-- [ ] 📄 阅读: [Little&#39;s Law in Practice](https://brooker.co.za/blog/2018/06/20/littles-law.html)
-- [ ] 📄 阅读: [Applying Little&#39;s Law to System Design](https://www.speedshop.co/2015/10/05/rack-miniprofile.html)
-- [ ] ✍️ **任务**:
+- [X] 📖 阅读《DDIA》Appendix: Little's Law
+- [X] 📄 阅读: [Little&#39;s Law in Practice](https://brooker.co.za/blog/2018/06/20/littles-law.html)
+- [X] 📄 阅读: [Applying Little&#39;s Law to System Design](https://www.speedshop.co/2015/10/05/rack-miniprofile.html)
+- [X] ✍️ **任务**:
   - 公式:并发用户数 = QPS × 平均响应时间
   - 练习:如果 QPS=1000,平均响应时间=100ms,系统需要支持多少并发连接?
 
