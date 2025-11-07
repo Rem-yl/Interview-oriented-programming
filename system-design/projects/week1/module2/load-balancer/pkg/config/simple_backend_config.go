@@ -1,15 +1,21 @@
 package config
 
-type SimpleBackEndConfig struct {
-	LoadBalancer LoadBalancer `yaml:"load_balancer"`
-	Servers      []*Server    `yaml:"server"`
-}
+import (
+	"os"
 
-type LoadBalancer struct {
-	URL string `yaml:"url"`
-}
+	"github.com/goccy/go-yaml"
+)
 
-type Server struct {
-	Name string `yaml:"name"`
-	URL  string `yaml:"url"`
+func LoadSimpleBackendConfig(path string) (*SimpleBackEndConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg SimpleBackEndConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
 }

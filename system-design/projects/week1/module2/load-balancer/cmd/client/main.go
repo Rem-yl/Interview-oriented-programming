@@ -21,11 +21,13 @@ func main() {
 		count       int
 		mode        string
 		concurrency int
+		jsonPath    string
 	)
 	flag.StringVar(&port, "port", "8187", "客户端启动端口")
 	flag.StringVar(&mode, "mode", "sequential", "测试器验证模式")
 	flag.IntVar(&count, "count", 100, "总请求数")
 	flag.IntVar(&concurrency, "concurrence", 10, "并发数")
+	flag.StringVar(&jsonPath, "output", "load_balancer.json", "分析结果的保存路径")
 	flag.Parse()
 
 	// 验证端口参数
@@ -62,7 +64,7 @@ func main() {
 
 	reporter := testers.NewStatistics()
 	reporter.Analyse(results)
-	err = reporter.GenReport("load_balancer_report.json")
+	err = reporter.GenReport(jsonPath)
 	if err != nil {
 		fmt.Println(err)
 	}

@@ -1,5 +1,6 @@
 load_balancer:
-  url: 127.0.0.1:8189
+  mode: round_robin
+  url: 127.0.0.1:8187
 
 server:
   - name: rem1
