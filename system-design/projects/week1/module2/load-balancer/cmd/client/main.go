@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/rem/load-balancer/internal/clients"
+	"github.com/rem/load-balancer/testers"
 )
 
 var (
@@ -14,32 +16,70 @@ var (
 )
 
 func main() {
-	port := flag.String("port", "8187", "客户端启动端口")
+	var (
+		port        string
+		count       int
+		mode        string
+		concurrency int
+	)
+	flag.StringVar(&port, "port", "8187", "客户端启动端口")
+	flag.StringVar(&mode, "mode", "sequential", "测试器验证模式")
+	flag.IntVar(&count, "count", 100, "总请求数")
+	flag.IntVar(&concurrency, "concurrence", 10, "并发数")
 	flag.Parse()
 
 	// 验证端口参数
-	if *port == "" {
+	if port == "" {
 		fmt.Println("错误: 端口号不能为空")
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	addr := fmt.Sprintf("http://%s:%s/balancer", url, *port)
+	// 1. 创建客户端
+	addr := fmt.Sprintf("http://%s:%s/balancer", url, port)
 	httpClient := clients.NewDefaultHttpClient(5 * time.Second)
 	loadBalanceClient := clients.NewLoadBalanceClient(httpClient, addr)
 	backendClient := clients.NewBackEndClient(httpClient)
 
-	backend, err := loadBalanceClient.GetBackend()
-	if err != nil {
-		fmt.Println("获取后端链接失败: ", err)
-		return
+	// 2. 创建测试器
+	var tester testers.Tester
+	switch mode {
+	case "sequential":
+		tester = testers.NewSequentialTester(loadBalanceClient, backendClient, count)
+	case "concurrence":
+		tester = testers.NewConcurrentTester(loadBalanceClient, backendClient, count, concurrency)
+	default:
+		panic("No tester.")
 	}
 
-	msg, err := backendClient.Request(backend.GetURL())
+	// 3. 运行测试
+	ctx := context.Background()
+	results, err := tester.Run(ctx)
 	if err != nil {
-		fmt.Printf("访问后端链接: %s 失败, err: %v \n", backend.GetURL(), err)
-		return
+		fmt.Printf("测试失败: %v \n", err)
+		os.Exit(1)
 	}
 
-	fmt.Println("访问服务成功: ", msg)
+	fmt.Printf("总请求数: %d \n", len(results))
+
+	successCnt := 0
+	for _, r := range results {
+		if r.Success {
+			successCnt++
+		}
+	}
+
+	fmt.Printf("成功率: %.2f%%\n", float64(successCnt)/float64(len(results))*100)
+
+	// 统计分布
+	distribution := make(map[string]int)
+	for _, r := range results {
+		if r.Success {
+			distribution[r.Backend]++
+		}
+	}
+	fmt.Println("后端分布:")
+	for backend, count := range distribution {
+		fmt.Printf("  %s: %d 次\n", backend, count)
+	}
 }
