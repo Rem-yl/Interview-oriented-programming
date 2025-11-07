@@ -40,6 +40,7 @@ fmt.Println("访问服务成功: ", msg)
 ## 二、实现目标
 
 实现两种测试器，验证负载均衡器的：
+
 1. **正确性**（SequentialTester）：算法分布是否符合预期（如 Round Robin 应该均匀）
 2. **并发安全性**（ConcurrentTester）：高并发下是否线程安全
 3. **性能**（ConcurrentTester）：QPS、延迟等指标
@@ -68,6 +69,7 @@ type RequestResult struct {
 ```
 
 **设计要点**：
+
 - `RequestID`：用于排序和追踪
 - `Backend`：统计分布的关键字段（如 "server-8180", "server-8181"）
 - `Latency`：性能分析的关键指标
@@ -84,11 +86,13 @@ type Tester interface {
 ```
 
 **为什么需要 context？**
+
 - ✅ 超时控制：整个测试的总超时
 - ✅ 取消信号：用户 Ctrl+C 可以优雅退出
 - ✅ 传递元数据：如 trace ID、request ID
 
 **为什么返回 []RequestResult？**
+
 - ✅ 后续统计分析需要完整数据（成功率、分布、延迟）
 - ✅ 可以生成报告（表格、JSON、图表）
 
@@ -164,11 +168,12 @@ func (t *SequentialTester) Run(ctx context.Context) ([]RequestResult, error) {
 ```
 
 **关键设计点**：
-| 设计点 | 代码 | 原因 |
-|--------|------|------|
-| 预分配切片 | `make([]RequestResult, 0, count)` | 避免多次扩容，提高性能 |
-| context 检查 | `select { case <-ctx.Done() }` | 支持用户 Ctrl+C 或超时退出 |
-| 错误不中断 | 单次失败继续循环 | 收集完整数据，统计成功率 |
+
+| 设计点       | 代码                                | 原因                       |
+| ------------ | ----------------------------------- | -------------------------- |
+| 预分配切片   | `make([]RequestResult, 0, count)` | 避免多次扩容，提高性能     |
+| context 检查 | `select { case <-ctx.Done() }`    | 支持用户 Ctrl+C 或超时退出 |
+| 错误不中断   | 单次失败继续循环                    | 收集完整数据，统计成功率   |
 
 #### 2.3 单次请求逻辑
 
@@ -210,6 +215,7 @@ func (t *SequentialTester) doSingleRequest(requestID int) RequestResult {
 ```
 
 **测试场景**：
+
 ```go
 // 测试用例 1：Round Robin 算法验证
 // 配置：3 个后端，发送 9 次请求
@@ -328,12 +334,13 @@ func (t *ConcurrentTester) Run(ctx context.Context) ([]RequestResult, error) {
 ```
 
 **关键设计点**：
-| 设计点 | 代码 | 原因 |
-|--------|------|------|
+
+| 设计点           | 代码                                     | 原因                     |
+| ---------------- | ---------------------------------------- | ------------------------ |
 | Buffered Channel | `make(chan RequestResult, totalCount)` | 避免 worker 阻塞等待接收 |
-| WaitGroup | `wg.Wait()` | 等待所有 worker 完成 |
-| 关闭 Channel | `close(resultCh)` | 通知收集 goroutine 结束 |
-| 余数分配 | 前几个 worker 多分配 | 确保总数正确 |
+| WaitGroup        | `wg.Wait()`                            | 等待所有 worker 完成     |
+| 关闭 Channel     | `close(resultCh)`                      | 通知收集 goroutine 结束  |
+| 余数分配         | 前几个 worker 多分配                     | 确保总数正确             |
 
 #### 3.4 Worker 逻辑
 
@@ -505,6 +512,7 @@ cmd/client/main.go        ❌ 需要修改（使用 Tester）
 ### Q1: 为什么单次请求失败不中断整个测试？
 
 **原因**：
+
 - ✅ 收集完整数据（需要计算成功率）
 - ✅ 测试稳定性（某个后端挂了，其他后端应该继续服务）
 - ✅ 真实场景模拟（生产环境部分请求失败很常见）
@@ -536,6 +544,7 @@ resultCh <- result
 ### Q3: 如何选择并发数？
 
 **建议**：
+
 - 顺序测试：验证算法正确性（Round Robin 分布）
 - 10-50 并发：模拟正常流量
 - 100-500 并发：压力测试
@@ -555,6 +564,7 @@ resultCh := make(chan RequestResult)
 ```
 
 **推荐选项 1**：
+
 - ✅ Worker 永远不会阻塞
 - ✅ 逻辑简单
 - ❌ 内存占用：100 次请求约 10KB（可接受）
@@ -580,13 +590,15 @@ Day 3: 改进和测试
 ## 九、验收标准
 
 ### 必须完成：
-- [ ] RequestResult 类型定义
-- [ ] SequentialTester 实现并通过测试
-- [ ] ConcurrentTester 实现并通过测试
-- [ ] main.go 能够使用两种测试器
-- [ ] 能够统计成功率和后端分布
+
+- [X] RequestResult 类型定义
+- [X] SequentialTester 实现并通过测试
+- [X] ConcurrentTester 实现并通过测试
+- [X] main.go 能够使用两种测试器
+- [X] 能够统计成功率和后端分布
 
 ### 验证方式：
+
 ```bash
 # 1. 启动后端服务器（3个）
 cd scripts && ./start_server.sh
@@ -610,6 +622,7 @@ cd scripts && ./start_server.sh
 ## 十、下一步（迭代 4-5）
 
 完成 Tester 后，后续迭代将实现：
+
 1. **Statistics**（统计分析）：成功率、平均延迟、P99延迟、标准差
 2. **Reporter**（报告输出）：表格、JSON、图表
 3. **高级功能**：重试、超时、熔断器
@@ -619,12 +632,14 @@ cd scripts && ./start_server.sh
 **总结**：
 
 核心思路就是：
+
 1. **RequestResult**：记录单次请求的所有信息
 2. **SequentialTester**：for 循环 + context 检查
 3. **ConcurrentTester**：Worker Pool + Channel 收集结果
 4. **main.go**：创建 Tester → 运行 → 统计输出
 
 开始实现时，建议**先完成 SequentialTester**，因为：
+
 - 逻辑简单，易于调试
 - 可以验证负载均衡算法正确性
 - ConcurrentTester 的单次请求逻辑可以复用

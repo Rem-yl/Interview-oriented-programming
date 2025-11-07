@@ -89,7 +89,7 @@ func (t *ConcurrentTester) Request(workID, i int) RequestResult {
 		return result
 	}
 
-	_, err = t.backendClient.Request(backend.GetURL())
+	_, err = t.backendClient.Request(backend.GetURL()) // 访问到了真实的后端服务
 	if err != nil {
 		result.Success = false
 		result.Error = fmt.Errorf("请求后端失败: %w", err)

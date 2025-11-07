@@ -60,26 +60,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("总请求数: %d \n", len(results))
-
-	successCnt := 0
-	for _, r := range results {
-		if r.Success {
-			successCnt++
-		}
-	}
-
-	fmt.Printf("成功率: %.2f%%\n", float64(successCnt)/float64(len(results))*100)
-
-	// 统计分布
-	distribution := make(map[string]int)
-	for _, r := range results {
-		if r.Success {
-			distribution[r.Backend]++
-		}
-	}
-	fmt.Println("后端分布:")
-	for backend, count := range distribution {
-		fmt.Printf("  %s: %d 次\n", backend, count)
+	reporter := testers.NewStatistics()
+	reporter.Analyse(results)
+	err = reporter.GenReport("load_balancer_report.json")
+	if err != nil {
+		fmt.Println(err)
 	}
 }
