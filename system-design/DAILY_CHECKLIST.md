@@ -208,10 +208,10 @@
 
 **5. 容量规划方法论**
 
-- [ ] 📖 阅读《System Design Interview》Chapter 1: Scale From Zero to Millions of Users
-- [ ] 📄 阅读: [Capacity Planning Best Practices](https://aws.amazon.com/builders-library/reliability-and-constant-work/)
-- [ ] 📄 阅读: [Instagram&#39;s Infrastructure](https://instagram-engineering.com/what-powers-instagram-hundreds-of-instances-dozens-of-technologies-adf2e22da2ad)
-- [ ] ✍️ **任务**: 学习自底向上估算法(存储 → 带宽 → 服务器数)
+- [X] 📖 阅读《System Design Interview》Chapter 1: Scale From Zero to Millions of Users
+- [X] 📄 阅读: [Capacity Planning Best Practices](https://aws.amazon.com/builders-library/reliability-and-constant-work/)
+- [X] 📄 阅读: [Instagram&#39;s Infrastructure](https://instagram-engineering.com/what-powers-instagram-hundreds-of-instances-dozens-of-technologies-adf2e22da2ad)
+- [X] ✍️ **任务**: 学习自底向上估算法(存储 → 带宽 → 服务器数)
 
 **实践项目**: 为真实系统建立完整容量模型
 
