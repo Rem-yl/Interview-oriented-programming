@@ -7,9 +7,6 @@ import (
 	"github.com/rem/load-balancer/pkg/errs"
 )
 
-type SwrrBackEnd struct {
-}
-
 type SwrrRobinLoadBalancer struct {
 	serverList  []*backend.SwrrBackEnd
 	mutex       sync.Mutex

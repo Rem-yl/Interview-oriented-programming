@@ -32,3 +32,8 @@ func NewSwrrRobinLoadBalancer(serverList []backend.BackEnd) *SwrrRobinLoadBalanc
 
 	return loadBalancer
 }
+
+func NewConsistenceHashLoadBalancer(serverList []backend.BackEnd) *ConsistenceHashLoadBalancer {
+
+	return nil
+}

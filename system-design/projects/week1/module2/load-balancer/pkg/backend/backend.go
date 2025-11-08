@@ -24,3 +24,9 @@ type SwrrBackEnd struct {
 	SimpleBackEnd
 	CurWeight int
 }
+
+// ------------------- HashBackend ------------------- //
+type HashBackend struct {
+	SimpleBackEnd
+	hashvalue string // TODO
+}

@@ -1,0 +1,14 @@
+load_balancer:
+  mode: consistence_hash
+  url: 127.0.0.1:8187
+
+server:
+  - name: rem1
+    url: http://127.0.0.1:8180
+    weight: 5
+  - name: rem2
+    url: http://127.0.0.1:8181
+    weight: 4
+  - name: rem3
+    url: http://127.0.0.1:8182
+    weight: 3

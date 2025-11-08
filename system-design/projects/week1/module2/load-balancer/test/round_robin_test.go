@@ -14,7 +14,7 @@ func createBackEnd() []backend.BackEnd {
 	for _, port := range ports {
 		url := "localhost:" + port
 		name := "server-" + port
-		backend := backend.NewSimpleBackEnd(url, name)
+		backend := backend.NewSimpleBackEnd(url, name, 1)
 		serverList = append(serverList, backend)
 	}
 
@@ -24,7 +24,7 @@ func createBackEnd() []backend.BackEnd {
 func TestRoundRobin(t *testing.T) {
 	serverList := createBackEnd()
 	balancer := algo.NewRoundRobinLoadBalancer(serverList)
-	for _ = range 10 {
+	for range 10 {
 		backend, err := balancer.GetBackEnd()
 		if err != nil {
 			t.Error(err)

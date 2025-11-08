@@ -18,7 +18,7 @@ var (
 	BuildTime = time.Now().String()
 )
 
-var availableBalancer = []string{"round_robin", "swrr_robin"}
+var availableBalancer = []string{"round_robin", "swrr_robin", "consistence_hash"}
 
 // ---- 构建负载均衡器 ----
 func buildBalancer(mode string, serverList []*config.Server) algo.LoadBalanceAlgo {
@@ -34,6 +34,8 @@ func buildBalancer(mode string, serverList []*config.Server) algo.LoadBalanceAlg
 		balancer = algo.NewRoundRobinLoadBalancer(backendList)
 	case "swrr_robin":
 		balancer = algo.NewSwrrRobinLoadBalancer(backendList)
+	case "consistence_hash":
+		balancer = algo.NewConsistenceHashLoadBalancer(backendList)
 	default:
 		panic(fmt.Sprintf("Load balancer mode: %s not found! You can use balancer in %v \n", mode, availableBalancer))
 	}
