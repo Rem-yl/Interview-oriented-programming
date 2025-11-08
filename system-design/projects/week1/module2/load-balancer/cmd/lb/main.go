@@ -4,11 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-yaml"
 	"github.com/rem/load-balancer/pkg/algo"
 	"github.com/rem/load-balancer/pkg/backend"
 	"github.com/rem/load-balancer/pkg/config"
@@ -20,29 +18,30 @@ var (
 	BuildTime = time.Now().String()
 )
 
-func loadSimpleBackendConfig(path string) (*config.SimpleBackEndConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfg config.SimpleBackEndConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
-}
+var availableBalancer = []string{"round_robin", "swrr_robin", "consistence_hash"}
 
 // ---- 构建负载均衡器 ----
-func buildBalancer(serverList []*config.Server) algo.LoadBalanceAlgo {
+func buildBalancer(mode string, serverList []*config.Server) algo.LoadBalanceAlgo {
+	var balancer algo.LoadBalanceAlgo
 	backendList := make([]backend.BackEnd, len(serverList))
 	for i, server := range serverList {
-		backend := backend.NewSimpleBackEnd(server.URL, server.Name)
+		backend := backend.NewSimpleBackEnd(server.URL, server.Name, server.Weight)
 		backendList[i] = backend
 	}
 
-	balancer := algo.NewRoundRobinLoadBalancer(backendList)
+	switch mode {
+	case "round_robin":
+		balancer = algo.NewRoundRobinLoadBalancer(backendList)
+	case "swrr_robin":
+		balancer = algo.NewSwrrRobinLoadBalancer(backendList)
+	case "consistence_hash":
+		balancer = algo.NewConsistenceHashLoadBalancer(backendList)
+	default:
+		panic(fmt.Sprintf("Load balancer mode: %s not found! You can use balancer in %v \n", mode, availableBalancer))
+	}
+
+	fmt.Printf("Use mode: %s to build load balancer! \n", mode)
+
 	return balancer
 }
 
@@ -72,7 +71,7 @@ func main() {
 	flag.StringVar(&configPath, "config", "configs/simple_backend.yaml", "path to config yaml file")
 	flag.Parse()
 
-	cfg, err := loadSimpleBackendConfig(configPath)
+	cfg, err := config.LoadSimpleBackendConfig(configPath)
 	if err != nil {
 		panic(err)
 	}
@@ -81,7 +80,7 @@ func main() {
 	fmt.Printf("BuildTime: %s \n", BuildTime)
 	fmt.Printf("Using config file: %s\n", configPath)
 
-	balancer = buildBalancer(cfg.Servers)
+	balancer = buildBalancer(cfg.LoadBalancer.Mode, cfg.Servers)
 
 	r := gin.Default()
 	r.GET("/", func(c *gin.Context) {
