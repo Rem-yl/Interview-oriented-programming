@@ -7,10 +7,11 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-func NewSimpleBackEnd(URL, Name string) *SimpleBackEnd {
+func NewSimpleBackEnd(url, name string, weight int) *SimpleBackEnd {
 	return &SimpleBackEnd{
-		URL:  URL,
-		Name: Name,
+		URL:    url,
+		Name:   name,
+		Weight: weight,
 	}
 }
 
@@ -26,4 +27,13 @@ func NewSimpleBackEndFromYaml(path string) []*SimpleBackEnd {
 	}
 
 	return backends
+}
+
+func NewSwrrBackEnd(url, name string, weight int) *SwrrBackEnd {
+	simpleBackend := NewSimpleBackEnd(url, name, weight)
+
+	return &SwrrBackEnd{
+		SimpleBackEnd: *simpleBackend,
+		CurWeight:     0,
+	}
 }

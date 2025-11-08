@@ -18,22 +18,27 @@ var (
 	BuildTime = time.Now().String()
 )
 
-var avaliuableBalancer = []string{"round_robin"}
+var availableBalancer = []string{"round_robin", "swrr_robin"}
 
 // ---- 构建负载均衡器 ----
 func buildBalancer(mode string, serverList []*config.Server) algo.LoadBalanceAlgo {
 	var balancer algo.LoadBalanceAlgo
 	backendList := make([]backend.BackEnd, len(serverList))
 	for i, server := range serverList {
-		backend := backend.NewSimpleBackEnd(server.URL, server.Name)
+		backend := backend.NewSimpleBackEnd(server.URL, server.Name, server.Weight)
 		backendList[i] = backend
 	}
 
-	if mode == "round_robin" {
+	switch mode {
+	case "round_robin":
 		balancer = algo.NewRoundRobinLoadBalancer(backendList)
-	} else {
-		panic(fmt.Sprintf("Load balancer mode: %s not found! You can use balancer in %v \n", mode, avaliuableBalancer))
+	case "swrr_robin":
+		balancer = algo.NewSwrrRobinLoadBalancer(backendList)
+	default:
+		panic(fmt.Sprintf("Load balancer mode: %s not found! You can use balancer in %v \n", mode, availableBalancer))
 	}
+
+	fmt.Printf("Use mode: %s to build load balancer! \n", mode)
 
 	return balancer
 }

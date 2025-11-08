@@ -8,7 +8,7 @@ import (
 )
 
 type RoundRobinLoadBalancer struct {
-	serverList []backend.BackEnd
+	serverList []*backend.SimpleBackEnd // 依赖具体实现, 而不是接口
 	idx        int
 	mutex      sync.Mutex
 }

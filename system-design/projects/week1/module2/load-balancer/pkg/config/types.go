@@ -11,6 +11,7 @@ type LoadBalancer struct {
 }
 
 type Server struct {
-	Name string `yaml:"name"`
-	URL  string `yaml:"url"`
+	Name   string `yaml:"name"`
+	URL    string `yaml:"url"`
+	Weight int    `yaml:"weight"`
 }
