@@ -328,8 +328,8 @@
 
 **1.1 原子性(Atomicity): Undo Log 机制**
 
-- [ ] 📖 阅读《MySQL技术内幕:InnoDB存储引擎》第6章 - 锁
-- [ ] 📖 阅读《DDIA》Chapter 7: Transactions
+- [ ] 📖 阅读《MySQL技术内幕:InnoDB存储引擎》第6章 - 锁 -> [笔记](./notes/resources/books/MySQL-InnoDB/Ch06_锁.md)
+- [ ] 📖 阅读《DDIA》Chapter 7: Transactions -> [笔记](./notes/resources/books/DDIA/Ch07_事务.md)
 - [ ] 📄 阅读: [MySQL InnoDB Undo Log详解](https://dev.mysql.com/doc/refman/8.0/en/innodb-undo-logs.html)
 - [ ] 💻 **源码阅读**: PostgreSQL Undo Log 实现 [src/backend/access/transam/xlog.c](https://github.com/postgres/postgres/blob/master/src/backend/access/transam/xlog.c)
 - [ ] ✍️ **任务**: 画出事务回滚时 Undo Log 的工作流程图
