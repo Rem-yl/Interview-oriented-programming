@@ -328,16 +328,16 @@
 
 **1.1 原子性(Atomicity): Undo Log 机制**
 
-- [ ] 📖 阅读《MySQL技术内幕:InnoDB存储引擎》第6章 - 锁 -> [笔记](./notes/resources/books/MySQL-InnoDB/Ch06_锁.md)
-- [ ] 📖 阅读《DDIA》Chapter 7: Transactions -> [笔记](./notes/resources/books/DDIA/Ch07_事务.md)
-- [ ] 📄 阅读: [MySQL InnoDB Undo Log详解](https://dev.mysql.com/doc/refman/8.0/en/innodb-undo-logs.html)
+- [X] 📖 阅读《MySQL技术内幕:InnoDB存储引擎》第6章 - 锁 -> [笔记](./notes/resources/books/MySQL-InnoDB/Ch06_锁.md)
+- [X] 📖 阅读《DDIA》Chapter 7: Transactions -> [笔记](./notes/resources/books/DDIA/Ch07_事务.md)
+- [X] 📄 阅读: [MySQL InnoDB Undo Log详解](https://dev.mysql.com/doc/refman/8.0/en/innodb-undo-logs.html)
 - [ ] 💻 **源码阅读**: PostgreSQL Undo Log 实现 [src/backend/access/transam/xlog.c](https://github.com/postgres/postgres/blob/master/src/backend/access/transam/xlog.c)
 - [ ] ✍️ **任务**: 画出事务回滚时 Undo Log 的工作流程图
 
 **1.2 一致性(Consistency): 约束检查**
 
-- [ ] 📖 阅读数据库原理教材:完整性约束部分
-- [ ] ✍️ **任务**: 列举 5 种数据库约束(主键、外键、唯一、检查、非空),说明如何保证一致性
+- [X] 📖 阅读数据库原理教材:完整性约束部分
+- [X] ✍️ **任务**: 列举 5 种数据库约束(主键、外键、唯一、检查、非空),说明如何保证一致性
 
 **1.3 隔离性(Isolation): MVCC 多版本并发控制**
 
