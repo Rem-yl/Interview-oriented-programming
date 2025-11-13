@@ -163,37 +163,1178 @@
 
 ### Chapter 3: 存储与检索
 
-**阅读状态**: ⏳ 待学习
+**阅读状态**: ✅ 已完成 | **日期**: 2025-11-13
 
-#### 预习大纲
+> 深入探讨数据库存储引擎的内部原理,理解不同数据结构的权衡
 
-**核心主题**:
-1. 日志结构存储引擎 (LSM-Tree)
-   - SSTable, MemTable
-   - Compaction 策略
-2. 面向页的存储引擎 (B-Tree)
-   - B-Tree vs B+Tree
-   - 写时复制 (COW)
-3. 其他索引结构
-   - 二级索引, 全文索引
-   - 在内存数据库中的索引
+#### 核心概念
 
-**关键对比**:
-- LSM-Tree (写优化) vs B-Tree (读优化)
-- 行存储 vs 列存储
+**本章核心问题**: 数据库如何存储数据?如何高效检索数据?
 
-#### 延伸资料 (待整理)
+---
 
-**论文**:
-- [The Log-Structured Merge-Tree (LSM-Tree)](https://www.cs.umb.edu/~poneil/lsmtree.pdf) - O'Neil et al.
+### 1️⃣ 存储引擎的两大流派
+
+#### 流派对比
+
+**日志结构存储引擎 (Log-Structured Storage)**:
+- 代表: LSM-Tree (Cassandra, HBase, RocksDB, LevelDB)
+- 核心思想: 追加写入,后台压缩
+- 优势: **写优化**,顺序 I/O
+- 劣势: 读需要查找多个数据结构
+
+**面向页的存储引擎 (Page-Oriented Storage)**:
+- 代表: B-Tree (MySQL InnoDB, PostgreSQL)
+- 核心思想: 原地更新,固定大小页
+- 优势: **读优化**,成熟稳定
+- 劣势: 写放大,需要 WAL
+
+---
+
+### 2️⃣ 最简单的数据库: 追加日志
+
+#### 极简实现
+
+**Bash 版数据库**:
+```bash
+#!/bin/bash
+
+# 写入 (追加到文件)
+db_set() {
+  echo "$1,$2" >> database
+}
+
+# 读取 (倒序查找最新值)
+db_get() {
+  grep "^$1," database | tail -n 1 | cut -d',' -f2
+}
+```
+
+**使用示例**:
+```bash
+$ db_set 123 '{"name":"London","attractions":["Big Ben"]}'
+$ db_set 456 '{"name":"San Francisco","attractions":["Golden Gate"]}'
+$ db_get 123
+{"name":"London","attractions":["Big Ben"]}
+```
+
+**性能特点**:
+- **写入**: O(1) - 追加到文件末尾
+- **读取**: O(n) - 扫描整个文件
+
+**问题**: 随着数据增长,读取越来越慢!
+
+---
+
+### 3️⃣ 索引: 加速查询的代价
+
+#### 索引的本质
+
+**定义**: 额外的数据结构,用于快速定位数据
+
+**权衡**:
+- ✅ 加速读取
+- ❌ 拖慢写入 (需要同时更新索引)
+- ❌ 占用额外空间
+
+**关键洞察**: 索引不是免费的,需要根据查询模式选择
+
+#### 哈希索引 (Hash Index)
+
+**最简单的索引结构**:
+
+**实现原理**:
+```
+内存哈希表:
+key → 文件偏移量
+
+文件内容:
+0: 123,{"name":"London"}
+28: 456,{"name":"SF"}
+50: 123,{"name":"New London"}  ← 更新
+
+哈希表更新:
+123 → 50  (指向最新值)
+456 → 28
+```
+
+**性能**:
+- **写入**: O(1) - 追加 + 更新哈希表
+- **读取**: O(1) - 哈希查找 + 一次磁盘 I/O
+
+**真实案例: Bitcask (Riak 的默认存储引擎)**
+- 适合场景: 值频繁更新,键数量不大
+- 示例: 视频播放次数、用户会话数据
+- 限制: 所有键必须放入内存
+
+#### 压缩 (Compaction) 与合并
+
+**问题**: 追加日志会无限增长,浪费空间
+
+**解决方案: 段压缩 (Segment Compaction)**
+
+**工作原理**:
+```
+原始段:
+123,{"name":"London"}
+456,{"name":"SF"}
+123,{"name":"New London"}  ← 覆盖旧值
+456,{"name":"San Francisco"}  ← 覆盖旧值
+
+压缩后:
+123,{"name":"New London"}
+456,{"name":"San Francisco"}
+```
+
+**压缩策略**:
+1. **日志分段 (Segmentation)**
+   - 达到阈值(如 1MB)后,关闭当前段,创建新段
+   - 后台线程合并旧段
+
+2. **合并过程**:
+   ```
+   段1: a=1, b=2, c=3
+   段2: a=4, b=5
+   段3: a=6
+
+   合并后: a=6, b=5, c=3
+   ```
+
+3. **读取逻辑**:
+   - 从新段到旧段依次查找
+   - 找到第一个匹配即停止
+
+**实现细节** (Bitcask):
+- **删除**: 写入特殊"墓碑"标记,压缩时忽略
+- **崩溃恢复**: 启动时重建哈希表 (或从快照恢复)
+- **并发控制**: 只有一个写线程,多个读线程
+- **部分写入**: 校验和检测损坏记录
+
+**限制**:
+- ❌ 哈希表必须放入内存
+- ❌ 不支持范围查询 (如 key 从 kitty00000 到 kitty99999)
+
+---
+
+### 4️⃣ SSTables 与 LSM-Tree
+
+#### SSTable (Sorted String Table)
+
+**核心改进**: 键在段内**有序存储**
+
+**SSTable vs 无序日志**:
+
+**无序日志**:
+```
+123,London
+456,SF
+789,Tokyo
+```
+
+**SSTable (键有序)**:
+```
+123,London
+456,SF
+789,Tokyo
+```
+
+**有序带来的优势**:
+
+**1. 合并更高效 (归并排序)**
+```
+段1: a=1, c=3, e=5
+段2: b=2, c=4, d=6
+
+合并 (类似归并排序):
+a=1, b=2, c=4, d=6, e=5
+```
+- 线性扫描,不需要全部加载到内存
+- 时间复杂度: O(n)
+
+**2. 索引可以稀疏**
+```
+SSTable (每 4KB 一个索引点):
+0KB:    "apple"
+4KB:    "banana"
+8KB:    "cherry"
+12KB:   "grape"
+
+查找 "coconut":
+1. 索引查找: "banana" < "coconut" < "cherry"
+2. 读取 4KB-8KB 块,二分查找
+```
+- 不需要为每个键维护索引
+- 节省内存!
+
+**3. 压缩块以节省 I/O**
+- 稀疏索引指向压缩块
+- 减少磁盘读取和网络传输
+
+#### 构建与维护 SSTable
+
+**问题**: 如何保证写入数据有序?
+
+**解决方案: 内存排序 + 定期刷盘**
+
+**LSM-Tree 架构**:
+
+```
+写入流程:
+1. 写入 MemTable (内存红黑树/AVL树)
+   MemTable: {c:3, a:1, b:2} → 有序: a:1, b:2, c:3
+
+2. MemTable 达到阈值(如 4MB)
+   刷盘为 SSTable (磁盘)
+
+3. SSTable 不可变,只追加
+
+磁盘结构:
+SSTable-1 (newest): a:10, b:20, c:30
+SSTable-2:          a:5,  d:15
+SSTable-3 (oldest): a:1,  e:25
+
+后台压缩:
+合并多个 SSTable → 新 SSTable
+删除旧文件
+```
+
+**查询流程**:
+```
+查找 key "a":
+1. 先查 MemTable → 找到 a:10
+2. 如果没找到,查 SSTable-1 (最新) → 找到就返回
+3. 再查 SSTable-2, SSTable-3...
+```
+
+**性能优化: Bloom Filter**
+
+**问题**: 查询不存在的键需要扫描所有 SSTable
+
+**Bloom Filter 原理**:
+```
+位数组 + 哈希函数
+
+插入 "apple":
+hash1("apple") = 3 → 设置 bit[3] = 1
+hash2("apple") = 7 → 设置 bit[7] = 1
+
+查询 "banana":
+hash1("banana") = 3 → bit[3] = 1
+hash2("banana") = 5 → bit[5] = 0
+结果: 一定不存在! (快速返回)
+
+查询 "cherry":
+hash1("cherry") = 3 → bit[3] = 1
+hash2("cherry") = 7 → bit[7] = 1
+结果: 可能存在 (需要查文件确认)
+```
+
+**特点**:
+- 空间效率高(每个键几个 bit)
+- 无假阴性(存在的键一定返回"可能存在")
+- 有假阳性(不存在的键可能返回"可能存在",但概率可控)
+
+#### 压缩策略
+
+**Size-Tiered Compaction** (Cassandra, HBase):
+```
+Level 0: [1MB] [1MB] [1MB] [1MB]
+         ↓ 合并
+Level 1: [4MB] [4MB]
+         ↓ 合并
+Level 2: [16MB]
+```
+- 相似大小的段合并
+- 写放大较小,但空间放大较大
+
+**Leveled Compaction** (LevelDB, RocksDB):
+```
+Level 0: 4个 SSTable (可重叠)
+Level 1: 10MB (不重叠,10 个 SSTable,每个 1MB)
+Level 2: 100MB (不重叠,100 个 SSTable,每个 1MB)
+...
+```
+- 每层容量限制
+- 层间合并时,只处理重叠键范围
+- 读放大小,但写放大较大
+
+**对比**:
+| 压缩策略 | 写放大 | 读放大 | 空间放大 |
+|---------|-------|-------|---------|
+| Size-Tiered | 低 | 高 | 高 |
+| Leveled | 高 | 低 | 低 |
+
+#### LSM-Tree 的优势与劣势
+
+**优势**:
+- ✅ **写吞吐量高**: 顺序写入,批量合并
+- ✅ **压缩效率高**: 数据有序,易于压缩
+- ✅ **适合写密集型**: 日志、监控数据
+
+**劣势**:
+- ❌ **读可能慢**: 需要查找多个 SSTable
+- ❌ **压缩开销**: 后台压缩消耗 CPU 和 I/O
+- ❌ **写放大**: 数据可能被多次重写
+
+**真实案例**:
+- **LevelDB**: Google 开发,Chrome 浏览器存储
+- **RocksDB**: Facebook 基于 LevelDB 优化
+- **Cassandra**: 分布式 NoSQL 数据库
+- **HBase**: Hadoop 生态系统
+
+---
+
+### 5️⃣ B-Tree: 最流行的索引结构
+
+#### B-Tree 的设计
+
+**核心思想**: 将数据库分解成固定大小的**页 (page)**,通常 4KB
+
+**B-Tree 结构**:
+```
+                [Root Page]
+               /     |     \
+         [Page1]  [Page2]  [Page3]
+         /  |  \   /  \     /  \
+      [Leaf][Leaf][Leaf][Leaf][Leaf]...
+
+示例 (每页最多 3 个键):
+              [10 | 20]
+            /    |     \
+      [3|5|7] [12|15] [25|30|35]
+
+查找 12:
+1. 根页: 10 < 12 < 20 → 走中间分支
+2. 叶页: 找到 12
+磁盘 I/O: 2 次
+```
+
+**关键特性**:
+
+**1. 平衡树**
+- 所有叶子节点深度相同
+- 深度 = log_b(n), b 是分支因子(branching factor)
+
+**示例**:
+```
+分支因子 b = 100
+4KB 页,容纳 100 个键
+100 万键: log_100(1,000,000) ≈ 3 层
+10 亿键: log_100(1,000,000,000) ≈ 4-5 层
+```
+
+**2. 原地更新**
+- 找到叶页,直接覆盖
+- 不像 LSM-Tree 追加写入
+
+**3. 范围查询高效**
+```
+查询 key 从 10 到 30:
+定位到 10 的叶页
+顺序扫描相邻叶页
+```
+
+#### B-Tree 的插入与分裂
+
+**正常插入**:
+```
+插入前: [3 | 7 | 12]
+插入 5:  [3 | 5 | 7 | 12]
+```
+
+**页满时分裂**:
+```
+插入前 (页满,最多 3 个键):
+Parent:    [10]
+            /  \
+Child:  [3|5|7|9]  [12|15]
+
+插入 6:
+1. 叶页满,分裂成两页
+2. 中间键 (7) 提升到父页
+
+插入后:
+Parent:    [7 | 10]
+          /   |   \
+      [3|5|6] [9] [12|15]
+```
+
+**父页也满时**:
+```
+递归分裂,可能导致根页分裂 → 树高度增加
+```
+
+**关键洞察**: B-Tree 深度增加缓慢 (log 增长)
+
+#### B-Tree 的可靠性保障
+
+**问题 1: 崩溃恢复**
+
+**场景**:
+```
+正在分裂页:
+1. 写入新页
+2. 更新父页指针
+3. 释放旧页
+
+如果在步骤 2 崩溃? → 数据库损坏!
+```
+
+**解决方案: Write-Ahead Log (WAL)**
+```
+操作顺序:
+1. 写 WAL: "即将插入 key=5, 分裂页 X"
+2. 执行操作: 修改 B-Tree 页
+3. WAL 标记完成
+
+崩溃恢复:
+扫描 WAL → 重放未完成操作
+```
+
+**WAL 的作用**:
+- 重做日志 (Redo Log) - InnoDB
+- 崩溃后恢复一致性状态
+
+**问题 2: 并发控制**
+
+**场景**: 多个线程同时修改 B-Tree
+
+**解决方案: Latches (轻量级锁)**
+```
+读操作: 共享锁 (允许多个读)
+写操作: 排他锁 (独占访问)
+
+优化: Latch Crabbing
+从根到叶一路加锁
+确认子节点安全后,释放父节点锁
+```
+
+#### B-Tree 优化技巧
+
+**1. 写时复制 (Copy-on-Write)**
+```
+修改页时:
+1. 复制一份新页
+2. 修改新页
+3. 更新父页指针
+
+优势:
+- 无需 WAL
+- 天然支持快照隔离
+
+示例: LMDB, BoltDB
+```
+
+**2. 页内压缩**
+```
+不存储完整键,只存储差异
+
+原始:
+"handlebars", "handlebra", "handlebar"
+
+压缩:
+"handlebars", "-s+a", "-a+r"
+
+节省空间,每页容纳更多键
+```
+
+**3. 兄弟页指针**
+```
+叶页间维护链表:
+[Page1] → [Page2] → [Page3]
+
+范围查询不需要回到父页
+```
+
+**4. B+ Tree 变种**
+```
+B-Tree: 内部节点和叶节点都存数据
+B+ Tree: 只有叶节点存数据,内部节点只存键
+
+优势:
+- 内部节点更小,可以缓存更多
+- 范围查询更快 (叶节点链表)
+
+MySQL InnoDB 使用 B+ Tree
+```
+
+---
+
+### 6️⃣ LSM-Tree vs B-Tree 对比
+
+#### 性能对比
+
+| 维度 | LSM-Tree | B-Tree |
+|-----|----------|--------|
+| **写性能** | ✅ 高 (顺序写) | ❌ 低 (随机写 + WAL) |
+| **读性能** | ❌ 慢 (多个 SSTable) | ✅ 快 (直接定位) |
+| **范围查询** | ❌ 较慢 | ✅ 快 (顺序扫描) |
+| **空间放大** | 中等 (取决于压缩策略) | 低 (页内碎片) |
+| **写放大** | 高 (多次压缩) | 中等 (WAL + 页更新) |
+
+#### 写放大 (Write Amplification)
+
+**定义**: 写入 1 字节数据,实际磁盘写入多少字节?
+
+**B-Tree 的写放大**:
+```
+写入 1 个键值对 (100 字节):
+1. 写 WAL: 100 字节
+2. 写 B-Tree 页: 4KB (整页写入)
+3. 可能分裂: 再写 4KB
+
+写放大 = 8KB / 100 字节 = 80x
+```
+
+**LSM-Tree 的写放大**:
+```
+写入 1 个键值对 (100 字节):
+1. 写 MemTable: 100 字节
+2. 刷盘 SSTable: 假设 4MB
+3. 压缩 5 次 (Leveled): 每次重写
+
+写放大 = 5 倍以上
+```
+
+**但 LSM-Tree 是顺序写, B-Tree 是随机写**:
+- HDD: 顺序写 100MB/s vs 随机写 1MB/s (100x 差异!)
+- SSD: 顺序写仍快于随机写
+
+#### 真实场景选择
+
+**选择 LSM-Tree (写密集)**:
+- 日志收集系统 (Elasticsearch, Cassandra)
+- 时序数据库 (InfluxDB)
+- 高写入吞吐量需求
+
+**选择 B-Tree (读密集)**:
+- 事务型数据库 (MySQL, PostgreSQL)
+- 范围查询频繁
+- 写入量可控
+
+**混合场景**:
+- TiDB: LSM-Tree 存储 + B-Tree 索引
+- MyRocks: MySQL + RocksDB
+
+---
+
+### 7️⃣ 其他索引结构
+
+#### 聚簇索引 vs 非聚簇索引
+
+**聚簇索引 (Clustered Index)**:
+```
+B-Tree 叶节点直接存储完整行
+
+索引结构 (主键 = user_id):
+        [Root]
+         /  \
+    [Leaf1] [Leaf2]
+      ↓       ↓
+   Row data Row data
+   (id=1,   (id=5,
+    name=   name=
+    "Alice") "Bob")
+
+优势: 查询主键不需要额外 I/O
+劣势: 二级索引需要存储主键 (占空间)
+
+示例: MySQL InnoDB (主键索引)
+```
+
+**非聚簇索引 (Secondary Index)**:
+```
+B-Tree 叶节点存储指针 (行号或主键)
+
+索引结构 (name):
+       [Root]
+        /  \
+   [Leaf1] [Leaf2]
+     ↓       ↓
+   "Alice" → RowID=1 → Heap File Row 1
+   "Bob"   → RowID=5 → Heap File Row 5
+
+需要回表查询!
+
+示例: MySQL InnoDB (非主键索引指向主键)
+```
+
+**覆盖索引 (Covering Index)**:
+```
+索引包含查询所需所有列
+
+CREATE INDEX idx_name_age ON users(name, age);
+
+SELECT name, age FROM users WHERE name = 'Alice';
+↑ 无需回表,直接从索引返回!
+```
+
+#### 多列索引 (Multi-Column Index)
+
+**1. 组合索引 (Concatenated Index)**
+```
+CREATE INDEX idx_lastname_firstname ON users(lastname, firstname);
+
+数据组织:
+"Smith, John"
+"Smith, Alice"
+"Wilson, Bob"
+
+支持查询:
+✅ WHERE lastname = 'Smith'
+✅ WHERE lastname = 'Smith' AND firstname = 'John'
+❌ WHERE firstname = 'John' (无法使用索引!)
+```
+
+**2. 多维索引 (Multi-Dimensional Index)**
+
+**R-Tree (空间索引)**:
+```
+用于地理位置查询
+
+数据: 餐厅位置 (经度, 纬度)
+
+查询: 查找附近 1km 内的餐厅
+SELECT * FROM restaurants
+WHERE ST_Distance(location, '(37.7749, -122.4194)') < 1000;
+
+R-Tree 将二维空间分割成矩形
+高效裁剪搜索空间
+
+PostGIS, MongoDB 地理索引使用 R-Tree
+```
+
+**Space-Filling Curve**:
+```
+将二维空间映射到一维
+
+Z-order curve (Morton code):
+(x, y) → 一维值
+
+示例:
+(0,0) → 00
+(1,0) → 01
+(0,1) → 10
+(1,1) → 11
+
+可以用 B-Tree 索引一维值!
+```
+
+#### 全文搜索索引
+
+**倒排索引 (Inverted Index)**:
+```
+文档:
+Doc1: "the quick brown fox"
+Doc2: "the fox jumped"
+
+倒排索引:
+"brown" → [Doc1]
+"fox"   → [Doc1, Doc2]
+"jumped" → [Doc2]
+"quick" → [Doc1]
+"the"   → [Doc1, Doc2]
+
+查询 "fox jumped":
+"fox" → [Doc1, Doc2]
+"jumped" → [Doc2]
+交集 → [Doc2]
+```
+
+**优化: 位置信息**:
+```
+"fox" → [(Doc1, pos=3), (Doc2, pos=1)]
+"jumped" → [(Doc2, pos=2)]
+
+短语查询 "fox jumped" (相邻词):
+Doc2 中 "fox" 在位置 1, "jumped" 在位置 2 → 匹配!
+```
+
+**示例**:
+- Elasticsearch, Solr: 基于 Lucene
+- MongoDB: 全文索引
+
+#### 内存数据库索引
+
+**问题**: 内存数据库为什么还需要索引?
+
+**答案**: 避免顺序扫描,提升查询速度
+
+**特殊优化**:
+- **无需持久化索引** (内存足够快)
+- **使用更复杂数据结构** (CPU 缓存友好)
+
+**T-Tree** (内存 B-Tree 变种):
+```
+节点间指针替代页引用
+更紧凑的内存布局
+```
+
+**Judy Array** (压缩前缀树):
+```
+极致压缩的 Trie
+用于稀疏键
+```
+
+---
+
+### 8️⃣ 事务处理与分析 (OLTP vs OLAP)
+
+#### 两种工作负载
+
+**OLTP (Online Transaction Processing)**:
+```
+特点:
+- 小批量读写 (SELECT, INSERT, UPDATE 单行)
+- 低延迟 (毫秒级)
+- 随机访问
+- 用户请求驱动
+
+示例:
+- 电商下单
+- 银行转账
+- 用户登录
+```
+
+**OLAP (Online Analytical Processing)**:
+```
+特点:
+- 大批量读取 (聚合查询,扫描数百万行)
+- 高吞吐量
+- 顺序扫描
+- 分析师查询驱动
+
+示例:
+- 销售报表 (过去 30 天总销售额)
+- 用户行为分析
+- 数据挖掘
+```
+
+**对比表**:
+
+| 维度 | OLTP | OLAP |
+|-----|------|------|
+| **读模式** | 少量行,根据键查询 | 大量行聚合 |
+| **写模式** | 随机写入,低延迟 | 批量导入 (ETL) |
+| **用户** | 终端用户 (Web 应用) | 分析师 (BI 工具) |
+| **数据量** | GB ~ TB | TB ~ PB |
+| **索引** | B-Tree, LSM-Tree | 列存储, 位图索引 |
+
+#### 数据仓库 (Data Warehouse)
+
+**问题**: 在 OLTP 数据库上跑分析查询会怎样?
+
+**后果**:
+- 扫描大量数据,锁表
+- 拖慢交易处理
+- 影响用户体验
+
+**解决方案: 分离存储**
+```
+OLTP 数据库 → ETL → 数据仓库 (OLAP)
+
+ETL (Extract-Transform-Load):
+1. 从生产数据库提取数据
+2. 转换为分析友好格式 (星型/雪花模式)
+3. 加载到数据仓库
+```
+
+**星型模式 (Star Schema)**:
+```
+事实表 (Fact Table):
+sales (sale_id, product_id, store_id, date_id, amount)
+
+维度表 (Dimension Tables):
+products (product_id, name, category)
+stores (store_id, name, city)
+dates (date_id, year, month, day)
+
+查询示例:
+SELECT p.category, SUM(s.amount)
+FROM sales s
+JOIN products p ON s.product_id = p.product_id
+WHERE d.year = 2024
+GROUP BY p.category
+```
+
+**雪花模式 (Snowflake Schema)**:
+```
+维度表进一步规范化
+
+products (product_id, name, category_id)
+  ↓
+categories (category_id, name, department_id)
+  ↓
+departments (department_id, name)
+```
+
+---
+
+### 9️⃣ 列式存储 (Column-Oriented Storage)
+
+#### 为什么需要列存储?
+
+**分析查询特点**:
+```sql
+SELECT SUM(sales.amount)
+FROM sales
+WHERE sales.date >= '2024-01-01';
+```
+- 只需要 `amount` 和 `date` 两列
+- 但行存储要读取整行!
+
+**行存储 vs 列存储**:
+
+**行存储 (Row-Oriented)**:
+```
+磁盘布局:
+Row1: id=1, date=2024-01-01, product_id=10, amount=100
+Row2: id=2, date=2024-01-02, product_id=20, amount=200
+Row3: id=3, date=2024-01-03, product_id=10, amount=150
+
+读取 100 万行:
+需要读取所有列 → 浪费 I/O!
+```
+
+**列存储 (Column-Oriented)**:
+```
+磁盘布局:
+id:         [1, 2, 3, ...]
+date:       [2024-01-01, 2024-01-02, 2024-01-03, ...]
+product_id: [10, 20, 10, ...]
+amount:     [100, 200, 150, ...]
+
+读取 100 万行的 amount:
+只读取 amount 列 → 节省 I/O!
+```
+
+**性能提升**:
+```
+示例: 100 列, 只查询 3 列
+行存储: 读取 100 列
+列存储: 读取 3 列
+I/O 减少 97%!
+```
+
+#### 列压缩
+
+**列存储天然适合压缩**:
+
+**原因**: 同一列数据类型相同,重复值多
+
+**Bitmap Encoding** (位图编码):
+```
+原始数据 (product_id 列):
+[10, 20, 10, 10, 30, 20, 10]
+
+编码:
+product_id=10: [1, 0, 1, 1, 0, 0, 1]
+product_id=20: [0, 1, 0, 0, 0, 1, 0]
+product_id=30: [0, 0, 0, 0, 1, 0, 0]
+
+查询 product_id IN (10, 20):
+bitmap_10 OR bitmap_20
+= [1, 1, 1, 1, 0, 1, 1]
+
+CPU 可以直接对位图做位运算!
+```
+
+**Run-Length Encoding** (游程编码):
+```
+原始位图:
+[1, 1, 1, 1, 0, 0, 0, 1, 1]
+
+压缩:
+1×4, 0×3, 1×2
+
+大量连续重复值时极致压缩!
+```
+
+**压缩比**:
+- 典型数据仓库: 10:1 ~ 100:1 压缩比
+- 更少 I/O,更快查询!
+
+#### 列存储的写入
+
+**问题**: 列存储如何高效写入?
+
+**挑战**:
+- 插入一行需要更新所有列文件
+- 原地更新会破坏压缩
+
+**解决方案: LSM-Tree 思想**
+```
+1. 新数据写入内存存储 (行存储)
+2. 积累足够数据后,批量转换为列存储
+3. 查询时合并内存和磁盘数据
+
+类似 Vertica, Parquet 的设计
+```
+
+**Parquet 文件格式**:
+```
+文件结构:
+Row Group 1 (数百万行):
+  Column 1 Chunk (压缩)
+  Column 2 Chunk (压缩)
+  ...
+Row Group 2:
+  ...
+
+优势:
+- 大块顺序 I/O
+- 极致压缩
+- 支持嵌套数据 (JSON)
+```
+
+---
+
+### 🔟 聚合: 物化视图与数据立方
+
+#### 物化视图 (Materialized View)
+
+**普通视图 (Virtual View)**:
+```sql
+CREATE VIEW sales_summary AS
+SELECT product_id, SUM(amount) as total
+FROM sales
+GROUP BY product_id;
+
+-- 查询时实时计算
+SELECT * FROM sales_summary;
+```
+
+**物化视图 (Materialized View)**:
+```sql
+CREATE MATERIALIZED VIEW sales_summary AS
+SELECT product_id, SUM(amount) as total
+FROM sales
+GROUP BY product_id;
+
+-- 预先计算并存储结果
+-- 查询直接读取,极快!
+```
+
+**权衡**:
+- ✅ 查询快 (预计算)
+- ❌ 占用空间
+- ❌ 写入慢 (需要更新物化视图)
+
+**适用场景**: 频繁查询的聚合结果
+
+#### 数据立方 (Data Cube / OLAP Cube)
+
+**多维聚合**:
+```
+维度: date, product, store
+度量: SUM(sales)
+
+预计算所有组合:
+- 按 date 聚合
+- 按 product 聚合
+- 按 date + product 聚合
+- 按 date + product + store 聚合
+- ...
+
+2^N 种组合!
+```
+
+**立方体可视化**:
+```
+        Store
+         ↑
+         |
+         +----→ Product
+        /
+       /
+      ↓
+    Date
+
+每个单元格存储预聚合值
+查询瞬间返回!
+```
+
+**劣势**:
+- 维度多时,组合爆炸 (10 维 = 1024 种组合)
+- 占用海量空间
+- 灵活性差 (只能查询预定义维度)
+
+**现代趋势**: 放弃数据立方,使用列存储 + 压缩
+
+---
+
+### 关键洞察
+
+1. **没有万能的存储引擎**
+   - LSM-Tree: 写优化,适合日志和时序数据
+   - B-Tree: 读优化,适合事务型数据库
+
+2. **索引是查询性能的关键**
+   - 但索引不是免费的 (写放大,空间占用)
+   - 需要根据查询模式选择
+
+3. **OLTP 和 OLAP 需要不同存储**
+   - OLTP: 行存储 + B-Tree
+   - OLAP: 列存储 + 压缩
+
+4. **顺序 I/O 是性能关键**
+   - LSM-Tree 通过顺序写提升性能
+   - 列存储通过批量读提升性能
+
+5. **压缩可以大幅提升性能**
+   - 减少 I/O
+   - 更好利用 CPU 缓存
+
+---
+
+### 延伸阅读
+
+#### 经典论文
+
+**LSM-Tree**:
+- [The Log-Structured Merge-Tree (LSM-Tree)](https://www.cs.umb.edu/~poneil/lsmtree.pdf) - O'Neil et al., 1996
+
+**B-Tree**:
 - [The Ubiquitous B-Tree](https://dl.acm.org/doi/10.1145/356770.356776) - Comer, 1979
+- [Organization and Maintenance of Large Ordered Indices](https://infolab.usc.edu/csci585/Spring2010/den_ar/indexing.pdf) - Bayer & McCreight, 1970 (原始 B-Tree 论文)
 
-**开源项目**:
-- [RocksDB](https://github.com/facebook/rocksdb) - LSM-Tree 实现
-- [SQLite B-Tree](https://www.sqlite.org/btreemodule.html) - B-Tree 实现
+**列存储**:
+- [C-Store: A Column-oriented DBMS](http://db.csail.mit.edu/projects/cstore/vldb.pdf) - Stonebraker et al., 2005
+- [Dremel: Interactive Analysis of Web-Scale Datasets](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf) - Google, 2010
 
-**文章**:
-- [LSM vs B-Tree: Which is Better?](https://tikv.org/deep-dive/key-value-engine/b-tree-vs-lsm/)
+#### 技术文章
+
+**LSM-Tree 深度解析**:
+- [LSM Trees: The Go-To Data Structure for Databases and Storage Systems](https://tikv.org/deep-dive/key-value-engine/b-tree-vs-lsm/)
+- [RocksDB: A Persistent Key-Value Store](https://github.com/facebook/rocksdb/wiki)
+- [LevelDB Implementation Notes](https://github.com/google/leveldb/blob/main/doc/impl.md)
+
+**B-Tree 实现**:
+- [SQLite B-Tree Module](https://www.sqlite.org/btreemodule.html)
+- [PostgreSQL B-Tree Index](https://www.postgresql.org/docs/current/btree-implementation.html)
+- [InnoDB B+Tree Index](https://dev.mysql.com/doc/refman/8.0/en/innodb-physical-structure.html)
+
+**列存储**:
+- [Parquet: Columnar Storage for Hadoop](https://parquet.apache.org/docs/)
+- [Apache Arrow: In-Memory Columnar Format](https://arrow.apache.org/)
+
+#### 视频资源
+
+- [B-Trees and B+ Trees. How they are useful in Databases](https://www.youtube.com/watch?v=aZjYr87r1b8) (15 分钟)
+- [LSM Trees Explained](https://www.youtube.com/watch?v=I6jB0nM9SKU) (20 分钟)
+- [Column vs Row-Oriented Databases](https://www.youtube.com/watch?v=Vw1fCeD06YI) (12 分钟)
+
+#### 开源项目源码
+
+**LSM-Tree 实现**:
+- [RocksDB](https://github.com/facebook/rocksdb) - Facebook, C++
+- [LevelDB](https://github.com/google/leveldb) - Google, C++
+- [BadgerDB](https://github.com/dgraph-io/badger) - Go 实现
+
+**B-Tree 实现**:
+- [BoltDB](https://github.com/boltdb/bolt) - Go, B+Tree, Copy-on-Write
+- [LMDB](https://github.com/LMDB/lmdb) - C, B+Tree, Memory-Mapped
+
+**列存储**:
+- [Apache Parquet](https://github.com/apache/parquet-format)
+- [ClickHouse](https://github.com/ClickHouse/ClickHouse) - 列存储 OLAP 数据库
+
+#### 相关书籍
+
+- 《Database Internals》 - Alex Petrov (深入数据库内部实现)
+- 《The Art of Database Design》 - 数据库设计原理
+
+---
+
+### 实践练习
+
+#### 练习 1: 实现简单 LSM-Tree
+
+**任务**: 用 Go/Python 实现一个简化版 LSM-Tree
+
+**要求**:
+1. 内存 MemTable (使用跳表或红黑树)
+2. SSTable 文件格式 (键有序)
+3. 合并压缩逻辑
+4. Bloom Filter 优化
+
+**参考**: [Week 2 项目 - LSM-Tree 存储引擎](../../projects/week2/)
+
+#### 练习 2: B-Tree 插入模拟
+
+**任务**: 手动模拟 B-Tree 插入过程
+
+**场景**:
+- B-Tree 阶数 = 3 (每个节点最多 2 个键)
+- 依次插入: 10, 20, 5, 6, 12, 30, 7, 17
+
+**步骤**:
+1. 画出每次插入后的树结构
+2. 标注分裂时刻
+3. 计算树高度
+
+#### 练习 3: 列存储性能对比
+
+**任务**: 对比行存储和列存储的查询性能
+
+**实验**:
+1. 创建 100 万行数据 (10 列)
+2. 行存储: CSV 文件
+3. 列存储: Parquet 文件
+4. 查询: `SELECT AVG(column_3) WHERE column_1 > 50000`
+5. 对比 I/O 和时间
+
+**工具**: Python + Pandas + PyArrow
+
+#### 练习 4: 索引选择题
+
+**场景 1**: 查询 `SELECT * FROM users WHERE email = 'alice@example.com'`
+- 应该建什么索引?
+- **答案**: B-Tree 索引 on `email`
+
+**场景 2**: 查询 `SELECT * FROM events WHERE timestamp BETWEEN '2024-01-01' AND '2024-01-31'`
+- 应该建什么索引?
+- **答案**: B-Tree 索引 on `timestamp` (支持范围查询)
+
+**场景 3**: 查询 `SELECT * FROM restaurants WHERE ST_Distance(location, POINT(37.7, -122.4)) < 1000`
+- 应该建什么索引?
+- **答案**: R-Tree 空间索引 on `location`
+
+**场景 4**: 时序日志数据,频繁写入,偶尔查询
+- 应该用什么存储引擎?
+- **答案**: LSM-Tree (InfluxDB, Elasticsearch)
+
+---
+
+### 我的思考
+
+**问题**:
+- ❓ 为什么 RocksDB 比 LevelDB 更快?
+- ❓ SSD 是否让 LSM-Tree 失去优势?
+- ❓ 为什么 PostgreSQL 不使用 LSM-Tree?
+
+**答案要点**:
+
+**RocksDB vs LevelDB**:
+- RocksDB 优化: 多线程压缩, Column Family, 更灵活的压缩策略
+- 适合生产环境,LevelDB 更适合学习
+
+**SSD 的影响**:
+- SSD 随机读写比 HDD 快,但顺序写仍优于随机写
+- LSM-Tree 减少写放大,延长 SSD 寿命 (减少擦除次数)
+- LSM-Tree 优势仍在,但差距缩小
+
+**PostgreSQL 选择 B-Tree**:
+- 事务型数据库,需要原地更新 (UPDATE 操作)
+- LSM-Tree 的删除和更新需要墓碑标记,压缩才能回收
+- B-Tree 更符合 MVCC 实现 (通过版本链)
+
+**在实际项目中的应用**:
+- Week 2 项目会实现 B-Tree 索引
+- Week 4 项目会实现 LSM-Tree 存储引擎
+- Week 5 项目会实现列存储格式
+
+---
 
 ---
 
