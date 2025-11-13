@@ -341,14 +341,14 @@
 
 **1.3 隔离性(Isolation): MVCC 多版本并发控制**
 
-- [ ] 📖 阅读《DDIA》Chapter 7: Weak Isolation Levels
-- [ ] 📄 阅读: [PostgreSQL MVCC 详解](https://www.postgresql.org/docs/current/mvcc.html)
-- [ ] 📄 阅读: [MySQL InnoDB MVCC 实现原理](https://dev.mysql.com/doc/refman/8.0/en/innodb-multi-versioning.html)
-- [ ] 📺 观看视频: [How MVCC Works](https://www.youtube.com/watch?v=jlcKKQbXWNI) (20分钟)
-- [ ] 💻 **源码阅读**: InnoDB MVCC 实现
+- [X] 📖 阅读《DDIA》Chapter 7: Weak Isolation Levels
+- [X] 📄 阅读: [PostgreSQL MVCC 详解](https://www.postgresql.org/docs/current/mvcc.html)
+- [X] 📄 阅读: [MySQL InnoDB MVCC 实现原理](https://dev.mysql.com/doc/refman/8.0/en/innodb-multi-versioning.html)
+- [X] 📺 观看视频: [How MVCC Works](https://www.youtube.com/watch?v=jlcKKQbXWNI) (20分钟)
+- [X] 💻 **源码阅读**: InnoDB MVCC 实现
   - 文件: `storage/innobase/read/read0read.cc` (ReadView 实现)
   - 重点理解: trx_id、roll_pointer、read view 机制
-- [ ] ✍️ **任务**:
+- [X] ✍️ **任务**:
   - 画出 MVCC 的版本链示意图
   - 解释为什么 MVCC 能避免读写冲突
   - 对比 MVCC 与锁机制的性能差异
