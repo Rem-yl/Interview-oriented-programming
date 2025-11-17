@@ -1,7 +1,5 @@
 module hash-learn
 
-go 1.24.0
+go 1.23
 
-toolchain go1.24.10
-
-require golang.org/x/crypto v0.44.0
+require golang.org/x/crypto v0.28.0
