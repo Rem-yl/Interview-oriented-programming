@@ -454,15 +454,33 @@ func BenchmarkExists(b *testing.B) {
 
 // 性能基准测试：Delete 操作
 func BenchmarkDelete(b *testing.B) {
-	// 每次迭代重新创建和填充 store
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		s := NewStore()
+	s := NewStore()
+
+	// 预先填充数据
+	for i := 0; i < 1000; i++ {
 		key := fmt.Sprintf("key-%d", i)
 		s.Set(key, i)
-		b.StartTimer()
+	}
 
+	b.ResetTimer()
+
+	// 循环删除，当删除完后重新填充
+	keyIndex := 0
+	for i := 0; i < b.N; i++ {
+		key := fmt.Sprintf("key-%d", keyIndex)
 		s.Delete(key)
+
+		keyIndex++
+		// 当删除完 1000 个键后，重新填充（这个操作不计入计时）
+		if keyIndex >= 1000 {
+			b.StopTimer()
+			for j := 0; j < 1000; j++ {
+				k := fmt.Sprintf("key-%d", j)
+				s.Set(k, j)
+			}
+			keyIndex = 0
+			b.StartTimer()
+		}
 	}
 }
 
