@@ -10,21 +10,12 @@ func NewPingHandler() *PingHander {
 
 func (h *PingHander) Handle(args []protocol.Value) *protocol.Value {
 	if len(args) == 0 {
-		return &protocol.Value{
-			Type: protocol.StringType,
-			Str:  "PONG",
-		}
+		return protocol.SimpleString("PONG")
 	}
 
 	if len(args) == 1 {
-		return &protocol.Value{
-			Type: protocol.BulkStringType,
-			Str:  args[0].Str,
-		}
+		return protocol.BulkString(args[0].Str)
 	}
 
-	return &protocol.Value{
-		Type: protocol.ErrorType,
-		Str:  "ERR wrong number of arguments for 'ping' command",
-	}
+	return protocol.Error("ERR wrong number of arguments for 'ping' command")
 }
