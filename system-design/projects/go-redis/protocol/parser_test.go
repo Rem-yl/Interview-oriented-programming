@@ -308,14 +308,14 @@ func TestParseBulkString(t *testing.T) {
 			}
 
 			if tt.isNull {
-				if value.Type != NullType {
+				if value.Type != BulkStringType {
 					t.Errorf("expected type NullType, got %v", value.Type)
 				}
 				if !value.IsNull {
 					t.Errorf("expected IsNull to be true")
 				}
 			} else {
-				if value.Type != StringType {
+				if value.Type != BulkStringType {
 					t.Errorf("expected type StringType, got %v", value.Type)
 				}
 				if value.Str != tt.expected {
@@ -411,7 +411,7 @@ func TestParseArray(t *testing.T) {
 				if v.Array[0].Type != IntType || v.Array[0].Int != 1 {
 					t.Errorf("expected first element to be int 1")
 				}
-				if v.Array[1].Type != StringType || v.Array[1].Str != "foo" {
+				if v.Array[1].Type != BulkStringType || v.Array[1].Str != "foo" {
 					t.Errorf("expected second element to be string 'foo'")
 				}
 				if v.Array[2].Type != StringType || v.Array[2].Str != "OK" {
@@ -466,7 +466,7 @@ func TestParseArray(t *testing.T) {
 			}
 
 			if tt.isNull {
-				if value.Type != NullType {
+				if value.Type != ArrayType {
 					t.Errorf("expected type NullType, got %v", value.Type)
 				}
 			} else {
@@ -527,7 +527,7 @@ func TestParse(t *testing.T) {
 		{
 			name:     "bulk string",
 			input:    "$5\r\nhello\r\n",
-			wantType: StringType,
+			wantType: BulkStringType,
 			wantErr:  false,
 			validate: func(t *testing.T, v *Value) {
 				if v.Str != "hello" {
@@ -671,7 +671,7 @@ func TestParseMultipleCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("third parse error: %v", err)
 	}
-	if value3.Type != StringType || value3.Str != "hello" {
+	if value3.Type != BulkStringType || value3.Str != "hello" {
 		t.Errorf("third command: expected StringType 'hello', got %v %q", value3.Type, value3.Str)
 	}
 

@@ -3,11 +3,11 @@ package protocol
 type ValueType string
 
 const (
-	StringType ValueType = "string"
-	ErrorType  ValueType = "err"
-	IntType    ValueType = "int"
-	ArrayType  ValueType = "array"
-	NullType   ValueType = "null"
+	StringType     ValueType = "string"
+	BulkStringType ValueType = "bulkString"
+	ErrorType      ValueType = "err"
+	IntType        ValueType = "int"
+	ArrayType      ValueType = "array"
 )
 
 type Value struct {

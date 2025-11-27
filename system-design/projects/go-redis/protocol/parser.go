@@ -114,7 +114,7 @@ func (p *Parser) parseBulkString() (*Value, error) {
 
 	if length == -1 {
 		return &Value{
-			Type:   NullType,
+			Type:   BulkStringType,
 			IsNull: true,
 		}, nil
 	}
@@ -138,7 +138,7 @@ func (p *Parser) parseBulkString() (*Value, error) {
 	}
 
 	value := &Value{
-		Type:   StringType,
+		Type:   BulkStringType,
 		Str:    string(buf),
 		IsNull: false,
 	}
@@ -159,7 +159,7 @@ func (p *Parser) parseArray() (*Value, error) {
 	}
 
 	if length == -1 {
-		return &Value{Type: NullType, IsNull: true}, nil
+		return &Value{Type: ArrayType, IsNull: true}, nil
 	}
 	if length == 0 {
 		return &Value{Type: ArrayType, Array: []Value{}}, nil
