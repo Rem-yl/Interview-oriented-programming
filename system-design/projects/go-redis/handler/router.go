@@ -54,4 +54,6 @@ func (r *Router) registerDefaultHandlers() {
 	r.Register("DEL", NewDelHandler(r.db))
 	r.Register("EXISTS", NewExistsHandler(r.db))
 	r.Register("KEYS", NewKeysHandler(r.db))
+	r.Register("INCR", NewIncrHandler(r.db))
+	r.Register("INCRBY", NewIncrByHandler(r.db))
 }

@@ -2,6 +2,7 @@ package store
 
 import (
 	"go-redis/logger"
+	"strconv"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -11,7 +12,7 @@ import (
 // 它使用读写锁（RWMutex）来保证并发访问的安全性。
 // 支持任意类型的值（interface{}）。
 type Store struct {
-	mu   sync.RWMutex          // 读写锁
+	mu   sync.RWMutex           // 读写锁
 	data map[string]interface{} // 数据存储
 }
 
@@ -21,6 +22,44 @@ func NewStore() *Store {
 	return &Store{
 		data: make(map[string]interface{}),
 	}
+}
+
+func (s *Store) Incr(key string) bool {
+	return s.IncrBy(key, 1)
+}
+
+func (s *Store) IncrBy(key string, cnt int64) bool {
+	logger.WithFields(logrus.Fields{
+		"operation": "INCRBY",
+		"key":       key,
+		"value":     cnt,
+	}).Debug("执行 INCRBY 操作")
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	value, exists := s.data[key]
+	if !exists {
+		s.data[key] = cnt
+		return true
+	}
+
+	logger.Debug("value: ", value)
+
+	switch value := value.(type) {
+	case int64:
+		s.data[key] = value + cnt
+	case string:
+		val, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return false
+		}
+		s.data[key] = val + cnt
+	default:
+		return false
+	}
+
+	return true
 }
 
 // Set 设置键值对

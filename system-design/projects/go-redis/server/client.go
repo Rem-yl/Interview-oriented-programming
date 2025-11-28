@@ -64,6 +64,7 @@ func (c *Client) Serve() {
 
 func (c *Client) sendResponse(resp *protocol.Value) error {
 	data := protocol.Serialize(resp)
+	logger.Debug(resp)
 
 	_, err := c.conn.Write([]byte(data))
 	if err != nil {
