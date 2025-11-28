@@ -16,31 +16,15 @@ func NewSetHandler(db *store.Store) *SetHandler {
 }
 
 func (h *SetHandler) Handle(args []protocol.Value) *protocol.Value {
-	if len(args) < 2 {
-		return protocol.Error("too less args")
+	if len(args) != 2 {
+		return protocol.Error("ERR wrong number of arguments for 'set' command")
 	}
 
-	if len(args) > 2 {
-		return protocol.Error("too many args")
-	}
+	key := args[0].Str
+	value := args[1].Str
 
-	keyVal, valueVal := args[0], args[1]
-	if keyVal.Type != protocol.BulkStringType {
-		return protocol.Error("ERR key type error")
-	}
-
-	if valueVal.Type != protocol.BulkStringType && valueVal.Type != protocol.IntType {
-		return protocol.Error("ERR value type error")
-	}
-
-	var value any
-	key := keyVal.Str
-	if valueVal.Type == protocol.BulkStringType {
-		value = valueVal.Str
-	} else {
-		value = valueVal.Int
-	}
-
+	// SET 命令总是存储字符串
+	// INCR/DECR 等命令会在需要时将字符串解析为整数
 	h.db.Set(key, value)
 
 	return protocol.SimpleString("OK")
