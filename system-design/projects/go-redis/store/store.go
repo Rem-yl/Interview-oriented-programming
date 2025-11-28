@@ -59,7 +59,8 @@ func (s *Store) Get(key string) (interface{}, bool) {
 }
 
 // Delete 删除指定的键
-func (s *Store) Delete(key string) {
+// 返回 true 表示键存在并被删除，false 表示键不存在
+func (s *Store) Delete(key string) bool {
 	logger.WithFields(logrus.Fields{
 		"operation": "DELETE",
 		"key":       key,
@@ -68,9 +69,16 @@ func (s *Store) Delete(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	delete(s.data, key)
+	// 检查键是否存在
+	_, exists := s.data[key]
+	if exists {
+		delete(s.data, key)
+		logger.WithField("key", key).Debug("Delete 操作完成 - 键已删除")
+		return true
+	}
 
-	logger.WithField("key", key).Debug("Delete 操作完成")
+	logger.WithField("key", key).Debug("Delete 操作完成 - 键不存在")
+	return false
 }
 
 // Exists 检查键是否存在

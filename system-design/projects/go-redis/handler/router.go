@@ -51,4 +51,7 @@ func (r *Router) registerDefaultHandlers() {
 	r.Register("PING", NewPingHandler())
 	r.Register("SET", NewSetHandler(r.db))
 	r.Register("GET", NewGetHandler(r.db))
+	r.Register("DEL", NewDelHandler(r.db))
+	r.Register("EXISTS", NewExistsHandler(r.db))
+	r.Register("KEYS", NewKeysHandler(r.db))
 }

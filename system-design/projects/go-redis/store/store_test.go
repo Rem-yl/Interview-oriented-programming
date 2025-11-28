@@ -2,9 +2,19 @@ package store
 
 import (
 	"fmt"
+	"go-redis/logger"
+	"io"
 	"sync"
 	"testing"
+
+	"github.com/sirupsen/logrus"
 )
+
+func init() {
+	// 测试时禁用日志输出，避免干扰测试结果
+	logger.SetOutput(io.Discard)
+	logger.SetLevel(logrus.ErrorLevel)
+}
 
 // TC1: 基本读写测试
 // 测试目标：验证基本的 Set 和 Get 功能
