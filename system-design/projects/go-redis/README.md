@@ -1,35 +1,50 @@
-# Go-Redis
+# 系统架构设计学习项目
 
 <div align="center">
 
 ![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)
+![Learning](https://img.shields.io/badge/purpose-architecture%20learning-orange.svg)
+![Status](https://img.shields.io/badge/stage-0%20completed-green.svg)
 
-**一个用 Go 语言从零实现的 Redis 服务器（教育目的）**
+**通过 Redis 案例学习分布式系统架构设计**
 
-[快速开始](#快速开始) • [架构设计](#架构设计) • [功能特性](#功能特性) • [文档](#文档) • [测试](#测试)
+[核心理念](#核心理念) • [快速开始](#快速开始) • [架构演进](#架构演进路线) • [学习指南](#学习方法)
 
 </div>
 
 ---
 
-## 📖 项目简介
+## 🎯 核心理念
 
-Go-Redis 是一个教育性质的 Redis 服务器实现，从零开始使用 Go 语言构建。本项目完整实现了 Redis 的核心组件，包括：
+> **本项目不是 Redis 克隆，而是系统架构设计学习工具**
 
-- ✅ **RESP 协议**：完整的 Redis 序列化协议解析和序列化
-- ✅ **存储引擎**：线程安全的内存键值存储
-- ✅ **命令处理**：可扩展的命令路由和处理架构
-- ✅ **TCP 服务器**：支持并发客户端连接的网络服务
-- ✅ **Redis 兼容**：可使用官方 `redis-cli` 客户端连接
+### 学习目标
 
-### 项目目标
+```
+❌ 错误目标：实现 200+ 个 Redis 命令
+✅ 正确目标：掌握分布式系统架构设计思维
 
-- 🎓 **学习目的**：深入理解 Redis 内部实现原理
-- 🏗️ **系统设计**：实践分层架构和模块化设计
-- 🔧 **工程实践**：掌握 Go 并发编程和网络编程
-- 📊 **性能优化**：探索高性能服务器开发技巧
+学习路径：
+  分析需求 → 架构方案对比 → 设计 Trade-offs → 实现验证 → 总结迁移
+```
+
+### 为什么用 Redis 作为案例？
+
+| 优势 | 说明 |
+|------|------|
+| **架构演进清晰** | 单机 → 持久化 → 主从 → 集群，层层递进 |
+| **设计权衡明显** | 性能 vs 可靠性、简单 vs 复杂 |
+| **模式可迁移** | 学到的架构模式可应用于缓存、消息队列、数据库 |
+| **源码质量高** | Redis 源码清晰，是学习分布式系统的绝佳教材 |
+
+### 学习成果标准
+
+**不是**：能写多少代码、实现多少功能
+**而是**：
+- ✅ 能独立设计一个分布式系统吗？
+- ✅ 能分析和权衡不同架构方案吗？
+- ✅ 能将架构思维应用到其他系统吗？
+- ✅ 能读懂并评价一个系统的架构设计吗？
 
 ---
 
@@ -121,49 +136,49 @@ OK
 
 ---
 
-## ✨ 功能特性
+## 🏗️ 架构演进路线
 
-### 已实现功能
+### 当前状态：Stage 0 - 单机内存存储架构 ✅
 
-#### 核心命令
+**已实现的架构能力**：
 
-| 命令 | 语法 | 描述 | 状态 |
-|------|------|------|------|
-| **PING** | `PING [message]` | 测试连接，返回 PONG 或回显消息 | ✅ |
-| **SET** | `SET key value` | 设置键值对 | ✅ |
-| **GET** | `GET key` | 获取键的值 | ✅ |
-| **DEL** | `DEL key [key ...]` | 删除一个或多个键 | ✅ |
-| **EXISTS** | `EXISTS key` | 检查键是否存在 | ✅ |
-| **KEYS** | `KEYS pattern` | 查找匹配模式的所有键 | ✅ |
+| 架构层次 | 设计模式 | 核心能力 |
+|---------|---------|---------|
+| **Server 层** | 多路复用 | TCP 服务、并发连接处理 |
+| **Protocol 层** | 解析器模式 | RESP 协议解析和序列化 |
+| **Handler 层** | 命令模式 | 可扩展的命令路由 |
+| **Store 层** | 并发安全 | RWMutex 保护的 Map |
 
-#### 协议支持
+**支持的命令**（6 个核心命令即可）：
+- `PING` `SET` `GET` `DEL` `EXISTS` `KEYS`
 
-- ✅ **RESP 协议**：完整支持 Redis 序列化协议
-  - Simple Strings (`+OK\r\n`)
-  - Errors (`-ERR message\r\n`)
-  - Integers (`:1000\r\n`)
-  - Bulk Strings (`$5\r\nhello\r\n`)
-  - Arrays (`*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n`)
-  - Null (`$-1\r\n`)
+**架构局限**：
+- ❌ 无持久化（数据易失）
+- ❌ 单点故障（无容错）
+- ❌ 单机瓶颈（无法扩展）
 
-#### 服务器特性
+### 下一阶段：Stage 1 - 持久化架构设计
 
-- ✅ **并发连接**：支持多客户端同时连接
-- ✅ **协程池**：每个客户端独立 goroutine 处理
-- ✅ **优雅关闭**：正确清理资源，无泄漏
-- ✅ **错误处理**：完善的错误处理和日志记录
-- ✅ **线程安全**：所有数据结构并发安全
+**架构主题**：数据可靠性（Reliability）
 
-### 规划中功能
+#### Phase 1.1: RDB 快照架构
+- **架构模式**：Snapshot Pattern
+- **核心概念**：Fork + COW、原子操作
+- **学习重点**：理解快照机制、性能 vs 可靠性权衡
+- **可迁移应用**：数据库备份、容器镜像、游戏存档
 
-- 📋 更多字符串命令（APPEND, INCR, DECR, STRLEN）
-- 📋 过期时间支持（EXPIRE, TTL, PERSIST）
-- 📋 列表操作（LPUSH, RPUSH, LPOP, RPOP, LRANGE）
-- 📋 哈希表操作（HSET, HGET, HDEL, HGETALL）
-- 📋 集合操作（SADD, SMEMBERS, SISMEMBER）
-- 📋 持久化（RDB 快照、AOF 日志）
-- 📋 发布/订阅（PUBLISH, SUBSCRIBE）
-- 📋 事务（MULTI, EXEC, DISCARD）
+#### Phase 1.2: AOF 日志架构
+- **架构模式**：Write-Ahead Logging
+- **核心概念**：WAL、Log Compaction、fsync 策略
+- **学习重点**：理解日志持久化、Durability vs Performance
+- **可迁移应用**：MySQL binlog、Kafka log、文件系统
+
+### 未来规划：Stage 2+
+
+**Stage 2**：分布式高可用架构（主从复制 + 故障转移）
+**Stage 3**：并发控制（事务、Pub/Sub）
+
+详见 **[FOCUSED-ROADMAP.md](docs/FOCUSED-ROADMAP.md)** 和 **[ARCHITECTURE-GUIDE.md](docs/ARCHITECTURE-GUIDE.md)**
 
 ---
 
@@ -522,62 +537,106 @@ test(protocol): add parser edge case tests
 
 ---
 
-## 📚 文档
+## 📖 学习方法
 
-- [存储层设计文档](docs/phase1-store.md)
-- [协议层设计文档](docs/phase2-protocol.md)
-- [命令处理层设计文档](docs/phase3-handler.md)
-- [服务器层设计文档](docs/phase4-server.md)
+### 架构设计思维框架
+
+每个阶段学习时，遵循这个思维框架：
+
+```
+1. 问题定义
+   - 当前架构的局限是什么？
+   - 要解决什么具体问题？
+
+2. 方案对比
+   - 有哪些可选方案？
+   - 每个方案的 Trade-offs 是什么？
+
+3. 设计决策
+   - 为什么选择这个方案？
+   - 关键设计点有哪些？
+
+4. 实现验证
+   - 如何验证设计是正确的？
+   - 性能测试、故障演练
+
+5. 总结迁移
+   - 学到了什么架构模式？
+   - 如何应用到其他系统？
+```
+
+### 推荐学习流程
+
+**不要**：
+- ❌ 直接看代码就开始写
+- ❌ 追求功能完整性
+- ❌ 孤立学习（不思考可迁移性）
+
+**应该**：
+- ✅ 先读 [ARCHITECTURE-GUIDE.md](docs/ARCHITECTURE-GUIDE.md) 理解架构思维
+- ✅ 再读 [FOCUSED-ROADMAP.md](docs/FOCUSED-ROADMAP.md) 规划学习路径
+- ✅ 每个阶段先画架构图，再写代码
+- ✅ 写设计文档记录 Trade-offs
+- ✅ 性能测试验证设计假设
+- ✅ 对比其他系统（如何应用到 Kafka、PostgreSQL）
+
+### 每个阶段的产出
+
+**代码**：
+- 核心功能实现（最小化，够用即可）
+- 单元测试 + 集成测试
+- 性能基准测试
+
+**文档**：
+- 架构设计文档（问题、方案、Trade-offs）
+- 性能测试报告
+- 学习笔记（可迁移的知识点）
 
 ---
 
-## 📚 参考资料
+## 📚 学习资源
 
-### Redis 相关
-- [Redis 官方文档](https://redis.io/docs/)
-- [Redis 协议规范](https://redis.io/docs/reference/protocol-spec/)
-- [Redis 命令参考](https://redis.io/commands/)
-- [《Redis 设计与实现》](http://redisbook.com/)
+### 必读文档
 
-### Go 语言
-- [Go 官方文档](https://go.dev/doc/)
-- [Effective Go](https://go.dev/doc/effective_go)
-- [Go 并发编程](https://go.dev/blog/pipelines)
+1. **[ARCHITECTURE-GUIDE.md](docs/ARCHITECTURE-GUIDE.md)** - 系统架构设计思维框架
+   - 架构模式详解（Snapshot、WAL、Replication）
+   - Trade-offs 分析方法
+   - CAP 定理、设计原则
 
-### 系统设计
-- [Designing Data-Intensive Applications](https://dataintensive.net/)
-- [System Design Primer](https://github.com/donnemartin/system-design-primer)
+2. **[FOCUSED-ROADMAP.md](docs/FOCUSED-ROADMAP.md)** - 架构演进学习路线
+   - Stage 1: 持久化架构（RDB、AOF）
+   - Stage 2: 分布式高可用架构
+   - Stage 3: 并发控制
 
----
+### 实现参考文档
 
-## 🎯 学习路线
+- [Phase 1: 存储层](docs/phase1-store.md)
+- [Phase 2: 协议层](docs/phase2-protocol.md)
+- [Phase 3: 命令处理层](docs/phase3-handler.md)
+- [Phase 4: 服务器层](docs/phase4-server.md)
 
-本项目按照以下阶段开发：
+### 外部资源
 
-### Phase 1: 存储层 ✅
-- 线程安全的键值存储
-- 基本的 CRUD 操作
-- 并发安全测试
+**书籍**（强烈推荐）：
+- 《Designing Data-Intensive Applications》- Martin Kleppmann
+  - 第 3 章：Storage and Retrieval
+  - 第 5 章：Replication
+  - 第 7 章：Transactions
 
-### Phase 2: 协议层 ✅
-- RESP 协议解析器
-- RESP 序列化器
-- 支持所有 RESP 数据类型
+- 《Redis 设计与实现》- 黄健宏
+  - 第 9-11 章：持久化
+  - 第 15-16 章：复制和哨兵
 
-### Phase 3: 命令处理层 ✅
-- 命令路由器
-- 6 个基础命令实现
-- 完整的单元测试
+**Redis 官方文档**：
+- [Redis Persistence](https://redis.io/docs/management/persistence/)
+- [Redis Replication](https://redis.io/docs/management/replication/)
+- [Redis Protocol](https://redis.io/docs/reference/protocol-spec/)
 
-### Phase 4: 服务器层 ✅
-- TCP 服务器实现
-- 并发客户端处理
-- 优雅关闭机制
-
-### Phase 5: 扩展功能 📋
-- 更多命令实现
-- 过期时间支持
-- 持久化功能
+**源码阅读**（选读）：
+- [Redis 源码](https://github.com/redis/redis)
+  - `rdb.c` - RDB 实现
+  - `aof.c` - AOF 实现
+  - `replication.c` - 复制协议
 
 ---
 

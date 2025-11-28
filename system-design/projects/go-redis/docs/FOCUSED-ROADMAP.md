@@ -1,624 +1,478 @@
-# Go-Redis 核心系统设计学习路线
+# 系统架构设计学习路线
 
 ## 🎯 核心理念
 
-**不追求命令数量，聚焦系统设计核心概念**
+**本项目是系统架构设计学习工具，不是 Redis 克隆**
 
 ```
-❌ 错误思路：实现 200+ 个命令
-✅ 正确思路：掌握分布式系统核心设计
+❌ 错误目标：实现完整的 Redis 功能
+✅ 正确目标：掌握分布式系统架构设计思维
+
+学习方式：
+  通过 Redis 案例 → 学习通用架构模式 → 应用到其他系统
 ```
+
+**为什么选择 Redis 作为学习案例？**
+- 架构演进清晰：单机 → 持久化 → 主从 → 集群
+- 设计权衡明显：性能 vs 可靠性，简单 vs 复杂
+- 应用广泛：架构模式可迁移到缓存、消息队列、数据库等系统
 
 ---
 
 ## 📍 当前状态
 
-✅ **已完成的核心能力**：
-- 网络通信（TCP Server）
+✅ **已完成：Stage 0 - 单机内存存储架构**
+
+**架构能力**：
+- 分层架构设计（Server → Protocol → Handler → Store）
+- 并发安全设计（RWMutex）
 - 协议解析（RESP）
-- 命令路由（Handler Pattern）
-- 并发控制（Goroutine + Lock）
-- 基础存储（In-Memory Map）
+- 命令模式（Handler Pattern）
 
-**结论**：基础架构已完备，可以直接进入系统设计学习。
+**架构局限**：
+- ❌ 无持久化：数据易失
+- ❌ 单点故障：无容错能力
+- ❌ 无法扩展：单机瓶颈
+
+**下一步**：解决数据可靠性问题
 
 ---
 
-## 🎓 精简学习路线（推荐）
+## 🏗️ 架构演进路线
 
-### Phase A: 数据可靠性 ⭐⭐⭐（核心）
+### Stage 1: 持久化架构设计 ⭐⭐⭐
 
-**学习目标**：理解分布式系统中的数据持久化
+**架构主题**：数据可靠性（Reliability）
 
-#### A1: RDB 快照持久化（1 周）
+#### 📋 学习路线
 
-**为什么重要**：
-- 理解快照机制（Point-in-Time Snapshot）
-- 学习 Fork + Copy-on-Write
-- 掌握序列化/反序列化
+**推荐路径**：先实现一种持久化方案，深入理解，再对比另一种
 
-**核心实现**：
+```
+路径 A（推荐）：RDB → AOF → 对比分析
+路径 B：       AOF → RDB → 对比分析
+```
+
+#### Phase 1.1: RDB 快照架构（1-2 周）
+
+**架构模式**：**Snapshot Pattern**（快照模式）
+
+##### 问题与方案
+
+**问题**：如何在不阻塞服务的情况下保存数据？
+
+**方案对比**：
+| 方案 | 优点 | 缺点 | 适用性 |
+|------|------|------|-------|
+| **停服保存** | 简单 | 服务中断❌ | 不可接受 |
+| **加锁复制** | 可行 | 长时间锁，内存翻倍 | 小数据集 |
+| **Fork + COW** | 不阻塞，高效 | 需要OS支持 | ✅ 最优 |
+
+##### 核心架构图
+
+```
+写入流程（正常运行）：
+Client → SET key value → Memory (快速完成)
+
+后台保存流程（BGSAVE）：
+┌────────────────────────────────┐
+│  Main Process (主进程)          │
+│  ┌──────────────────────────┐  │
+│  │  In-Memory Data          │  │
+│  │  {key1: val1, ...}       │  │
+│  └──────────────────────────┘  │
+│           │                     │
+│           │ Fork()              │
+│           ├──────────────┐      │
+│           │              │      │
+│  ┌────────▼──────┐  ┌────▼─────────────┐
+│  │ 继续处理请求   │  │ Child Process    │
+│  │ (写时复制)     │  │ 序列化数据        │
+│  └───────────────┘  │ → dump.rdb       │
+│                     └──────────────────┘
+└────────────────────────────────────────┘
+```
+
+##### 关键设计决策
+
+**决策 1：序列化格式**
+
 ```go
-// 1. 数据快照
-type Snapshot struct {
-    Timestamp  time.Time
-    Data       map[string]interface{}
-    Expires    map[string]time.Time
+// 方案 A：JSON (易读，体积大，慢)
+{
+  "version": 1,
+  "data": {"key1": "value1", "key2": 123}
 }
 
-// 2. 保存（使用 encoding/gob 或 JSON）
-func (s *Store) SaveSnapshot(filename string) error
+// 方案 B：Gob (Go原生，紧凑，快) ✅ 选择此方案
+// 二进制格式，直接编码 Go 数据结构
 
-// 3. 恢复
-func (s *Store) LoadSnapshot(filename string) error
-
-// 4. 后台保存（避免阻塞）
-func (s *Store) BackgroundSave() error
+// 方案 C：自定义二进制 (最优性能，维护成本高)
+// Redis 使用此方案
 ```
 
-**学到的概念**：
-- 数据一致性
-- 崩溃恢复
-- 性能与可靠性权衡
+**决策 2：原子性保证**
 
-**不需要实现**：
-- ❌ 压缩算法（LZF）
-- ❌ CRC 校验和
-- ❌ 增量快照
-
----
-
-#### A2: AOF 日志持久化（1 周）
-
-**为什么重要**：
-- 理解 Write-Ahead Logging
-- 学习日志回放机制
-- 掌握 fsync 和数据安全性
-
-**核心实现**：
-```go
-// 1. 日志记录
-type AOF struct {
-    file   *os.File
-    buffer *bufio.Writer
-}
-
-func (a *AOF) AppendCommand(cmd string) error {
-    a.buffer.WriteString(cmd + "\n")
-    // 根据策略 fsync
-    if syncPolicy == "always" {
-        return a.file.Sync()
-    }
-}
-
-// 2. 日志重放
-func (a *AOF) Replay(router *handler.Router) error {
-    // 读取文件，逐行执行命令
-}
-
-// 3. AOF 重写（压缩）
-func (a *AOF) Rewrite() error {
-    // 将当前内存状态转为命令序列
-}
-```
-
-**学到的概念**：
-- 日志结构存储（Log-Structured Storage）
-- Durability vs Performance
-- 日志压缩（Compaction）
-
-**不需要实现**：
-- ❌ 混合持久化（RDB + AOF）
-- ❌ AOF 格式的 RESP 优化
-
----
-
-#### A3: 过期机制（1 周）
-
-**为什么重要**：
-- 理解缓存淘汰
-- 学习后台任务调度
-- 掌握时间轮算法
-
-**核心实现**：
-```go
-// 1. 扩展数据结构
-type Store struct {
-    data    map[string]interface{}
-    expires map[string]time.Time  // 过期时间
-}
-
-// 2. 懒删除（被动删除）
-func (s *Store) Get(key string) (interface{}, bool) {
-    if s.isExpired(key) {
-        s.deleteExpired(key)
-        return nil, false
-    }
-    return s.data[key], true
-}
-
-// 3. 定期删除（主动删除）
-func (s *Store) cleanupLoop() {
-    ticker := time.NewTicker(100 * time.Millisecond)
-    for range ticker.C {
-        s.sampleAndDelete(20) // 随机抽样 20 个键
-    }
-}
-```
-
-**学到的概念**：
-- 懒删除 vs 主动删除
-- 时间轮（Time Wheel）
-- 资源回收策略
-
-**不需要实现**：
-- ❌ 复杂的淘汰策略（LRU, LFU）
-- ❌ 最大内存限制（maxmemory）
-
----
-
-### Phase B: 分布式协作 ⭐⭐⭐（核心）
-
-**学习目标**：理解分布式系统中的数据一致性
-
-#### B1: 主从复制（2 周）
-
-**为什么重要**：
-- 理解数据复制原理
-- 学习最终一致性
-- 掌握全量同步 + 增量同步
-
-**核心实现**：
-```go
-// 1. Master 角色
-type Master struct {
-    replicas []*Replica
-    backlog  *ReplicationBacklog // 复制积压缓冲区
-}
-
-func (m *Master) PropagateCommand(cmd string) {
-    for _, replica := range m.replicas {
-        replica.SendCommand(cmd)
-    }
-}
-
-// 2. Replica 角色
-type Replica struct {
-    masterAddr string
-    offset     int64 // 复制偏移量
-}
-
-func (r *Replica) Sync() error {
-    // 1. 发送 PSYNC offset
-    // 2. 接收 RDB 快照
-    // 3. 应用增量命令
-}
-
-// 3. 复制协议
-// PSYNC <replication-id> <offset>
-// +FULLRESYNC <replication-id> <offset>
-// +CONTINUE
-```
-
-**学到的概念**：
-- 全量同步（Full Sync）
-- 增量同步（Partial Sync）
-- 复制偏移量（Offset）
-- 主从延迟（Replication Lag）
-
-**不需要实现**：
-- ❌ 无盘复制（Diskless Replication）
-- ❌ 链式复制（Cascading Replication）
-
----
-
-#### B2: 高可用：简化版哨兵（1 周）
-
-**为什么重要**：
-- 理解故障检测
-- 学习自动故障转移
-- 掌握分布式共识基础
-
-**核心实现**：
-```go
-// 简化版：单个哨兵监控主节点
-type Sentinel struct {
-    masterAddr string
-    replicas   []string
-}
-
-// 1. 心跳检测
-func (s *Sentinel) monitorMaster() {
-    ticker := time.NewTicker(1 * time.Second)
-    for range ticker.C {
-        if !s.ping(s.masterAddr) {
-            s.failoverCount++
-            if s.failoverCount >= 3 {
-                s.doFailover() // 3 次失败则故障转移
-            }
-        }
-    }
-}
-
-// 2. 故障转移
-func (s *Sentinel) doFailover() {
-    // 1. 选择最佳从节点（复制偏移量最大）
-    // 2. 提升为主节点
-    // 3. 通知其他从节点
-}
-```
-
-**学到的概念**：
-- 心跳检测（Heartbeat）
-- 故障检测（Failure Detection）
-- 自动故障转移（Failover）
-- 选主算法（简化版）
-
-**不需要实现**：
-- ❌ 完整的 Raft/Paxos 共识算法
-- ❌ 脑裂处理
-- ❌ 多哨兵投票
-
----
-
-### Phase C: 并发与性能 ⭐⭐（进阶）
-
-**学习目标**：理解高性能系统设计
-
-#### C1: 事务支持（1 周）
-
-**为什么重要**：
-- 理解 ACID 特性
-- 学习乐观锁（WATCH）
-- 掌握命令队列
-
-**核心实现**：
-```go
-type Transaction struct {
-    commands []Command
-    watching map[string]uint64 // 监视的键及版本号
-}
-
-// MULTI
-func (c *Client) StartTransaction() {
-    c.inTransaction = true
-    c.txn = &Transaction{}
-}
-
-// WATCH key
-func (c *Client) Watch(key string) {
-    version := c.store.GetVersion(key)
-    c.txn.watching[key] = version
-}
-
-// EXEC
-func (c *Client) ExecTransaction() []*Value {
-    // 1. 检查 WATCH 的键是否被修改
-    for key, oldVersion := range c.txn.watching {
-        if c.store.GetVersion(key) != oldVersion {
-            return nil // 事务失败
-        }
-    }
-
-    // 2. 原子执行所有命令
-    results := make([]*Value, len(c.txn.commands))
-    for i, cmd := range c.txn.commands {
-        results[i] = c.router.Route(cmd)
-    }
-    return results
-}
-```
-
-**学到的概念**：
-- 事务隔离
-- 乐观锁（Optimistic Locking）
-- CAS（Compare-And-Swap）
-
-**不需要实现**：
-- ❌ MVCC（多版本并发控制）
-- ❌ 完整的 ACID 保证
-
----
-
-#### C2: 发布/订阅（1 周）
-
-**为什么重要**：
-- 理解消息队列模式
-- 学习观察者模式
-- 掌握异步通信
-
-**核心实现**：
-```go
-type PubSub struct {
-    mu          sync.RWMutex
-    channels    map[string]map[*Client]struct{}
-    patterns    map[string]map[*Client]struct{}
-}
-
-// SUBSCRIBE channel
-func (ps *PubSub) Subscribe(client *Client, channel string) {
-    ps.mu.Lock()
-    defer ps.mu.Unlock()
-
-    if ps.channels[channel] == nil {
-        ps.channels[channel] = make(map[*Client]struct{})
-    }
-    ps.channels[channel][client] = struct{}{}
-}
-
-// PUBLISH channel message
-func (ps *PubSub) Publish(channel string, message string) int {
-    ps.mu.RLock()
-    defer ps.mu.RUnlock()
-
-    count := 0
-    for client := range ps.channels[channel] {
-        client.SendMessage(channel, message)
-        count++
-    }
-    return count
-}
-```
-
-**学到的概念**：
-- 发布订阅模式
-- 广播机制
-- 消息路由
-
-**不需要实现**：
-- ❌ 持久化消息队列
-- ❌ 消息 ACK
-
----
-
-### Phase D: 可观测性 ⭐（运维）
-
-**学习目标**：理解生产系统监控
-
-#### D1: 监控和统计（1 周）
-
-**核心实现**：
-```go
-type Metrics struct {
-    Commands      int64         // 命令总数
-    Connections   int64         // 连接总数
-    KeysCount     int64         // 键总数
-    Memory        int64         // 内存使用
-    HitRate       float64       // 缓存命中率
-    ExpiredKeys   int64         // 过期键数量
-}
-
-// INFO 命令
-func (s *Server) Info() map[string]interface{} {
-    return map[string]interface{}{
-        "version":       "1.0.0",
-        "uptime":        time.Since(s.startTime).Seconds(),
-        "commands":      s.metrics.Commands,
-        "connections":   s.metrics.Connections,
-        "keys":          s.store.KeyCount(),
-        "memory":        s.metrics.Memory,
-        "hit_rate":      s.metrics.HitRate,
-    }
-}
-
-// 暴露 Prometheus Metrics
-http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-    metrics := s.collectMetrics()
-    fmt.Fprintf(w, "redis_commands_total %d\n", metrics.Commands)
-    fmt.Fprintf(w, "redis_connections_total %d\n", metrics.Connections)
-    // ...
-})
-```
-
-**学到的概念**：
-- 指标收集（Metrics）
-- Prometheus 集成
-- 可观测性（Observability）
-
----
-
-## 🎯 推荐学习路径
-
-### 路径 1：数据可靠性优先（推荐）
-
-```
-当前状态
-    ↓
-Phase A3: 过期机制（1 周）
-    ↓
-Phase A1: RDB 持久化（1 周）
-    ↓
-Phase A2: AOF 持久化（1 周）
-    ↓
-Phase B1: 主从复制（2 周）
-    ↓
-Phase C1: 事务（1 周）
-    ↓
-Phase D1: 监控（1 周）
-```
-
-**总计**：8 周完成核心系统设计学习
-
----
-
-### 路径 2：分布式系统优先
-
-```
-当前状态
-    ↓
-Phase A3: 过期机制（1 周）
-    ↓
-Phase B1: 主从复制（2 周）
-    ↓
-Phase B2: 哨兵（1 周）
-    ↓
-Phase A1: RDB 持久化（1 周）
-    ↓
-Phase C1: 事务（1 周）
-    ↓
-Phase C2: 发布订阅（1 周）
-```
-
-**总计**：7 周完成分布式核心学习
-
----
-
-## 📊 学习价值对比
-
-| 学习内容 | 命令数量 | 系统设计价值 |
-|---------|---------|-------------|
-| **再实现 20 个字符串命令** | +20 | ⭐ 低（重复劳动） |
-| **实现 RDB 持久化** | +2 | ⭐⭐⭐⭐⭐ 极高 |
-| **实现主从复制** | +3 | ⭐⭐⭐⭐⭐ 极高 |
-| **实现事务** | +4 | ⭐⭐⭐⭐ 高 |
-| **实现发布订阅** | +5 | ⭐⭐⭐⭐ 高 |
-
----
-
-## 🎓 每个阶段的学习重点
-
-### Phase A: 数据可靠性
-**理论学习**：
-- 《Designing Data-Intensive Applications》第 3 章（存储与检索）
-- Redis 持久化文档
-- WAL（Write-Ahead Logging）原理
-
-**实践重点**：
-- 数据一致性保证
-- 性能与可靠性权衡
-- 崩溃恢复机制
-
----
-
-### Phase B: 分布式协作
-**理论学习**：
-- 《Designing Data-Intensive Applications》第 5 章（复制）
-- CAP 定理
-- 最终一致性
-
-**实践重点**：
-- 主从同步协议
-- 故障检测和恢复
-- 数据一致性保证
-
----
-
-### Phase C: 并发与性能
-**理论学习**：
-- 事务隔离级别
-- 乐观锁 vs 悲观锁
-- 发布订阅模式
-
-**实践重点**：
-- 并发控制
-- 异步通信
-- 性能优化
-
----
-
-## 💡 最终建议
-
-### 精简命令集（足够用）
-
-保留核心命令即可：
 ```bash
-# 字符串（5 个足够）
-SET, GET, DEL, INCR, EXPIRE
+# 问题：保存过程中崩溃怎么办？
+# 解决：先写临时文件，成功后原子替换
 
-# 列表（可选，选 4 个）
-LPUSH, RPUSH, LPOP, LRANGE
-
-# 哈希（可选，选 4 个）
-HSET, HGET, HDEL, HGETALL
-
-# 通用（2 个）
-KEYS, EXISTS
+1. 写入 → temp-12345.rdb
+2. 成功 → rename(temp-12345.rdb, dump.rdb)  # 原子操作
+3. 失败 → 保留旧的 dump.rdb，删除 temp 文件
 ```
 
-**总计**：11-15 个命令足够支撑所有系统设计学习。
+##### 实现范围
 
----
+**必须实现**：
+```go
+// 1. 数据结构
+type Snapshot struct {
+    Version   int
+    Timestamp time.Time
+    Data      map[string]interface{}
+}
 
-### 不要实现的功能（性价比低）
+// 2. 核心接口（Store 层）
+func (s *Store) Save(filename string) error    // 阻塞保存
+func (s *Store) Load(filename string) error    // 加载
 
-❌ **命令数量堆砌**
-- APPEND, STRLEN, GETRANGE 等（边际价值低）
-- MSETNX, SETRANGE 等（用得少）
+// 3. 命令（Handler 层）
+SAVE      // 前台保存（会阻塞）
+BGSAVE    // 后台保存（简化版，goroutine 实现即可，不用真 Fork）
+```
 
-❌ **复杂数据类型**
-- Sorted Set（跳表实现复杂，价值不大）
-- Stream（太新，概念复杂）
-- Bitmap, HyperLogLog（特殊场景）
+**不必实现**：
+- ❌ 真实的 Fork（Go 不支持，用 goroutine 模拟即可）
+- ❌ LZF 压缩（性价比低）
+- ❌ CRC 校验（可选优化）
 
-❌ **高级特性**
-- Lua 脚本（需要嵌入脚本引擎）
-- Redis Cluster（分片太复杂）
-- Redis Modules（API 设计复杂）
+**验证方法**：
+```bash
+# 1. 功能测试
+SET key1 value1
+SET key2 value2
+BGSAVE
+# 重启服务
+GET key1  # 应该返回 value1
 
----
+# 2. 性能测试
+# 写入 10万 键值对，测试保存和加载时间
+```
 
-### 应该深入的功能（高价值）
+##### 学习重点
 
-✅ **持久化**（核心中的核心）
-- RDB：理解快照
-- AOF：理解 WAL
+**理解的架构概念**：
+- ✅ **Snapshot Pattern**：虚拟机快照、Docker镜像也用此模式
+- ✅ **Fork + COW**：操作系统层面的优化技巧
+- ✅ **原子操作**：如何保证数据一致性
 
-✅ **复制**（分布式基础）
-- 主从复制：理解数据同步
-- 哨兵：理解故障转移
-
-✅ **并发控制**（性能关键）
-- 事务：理解隔离
-- 发布订阅：理解异步
-
-✅ **可观测性**（生产必备）
-- 监控指标
-- 日志记录
-
----
-
-## 🎯 8 周学习计划（推荐）
-
-| 周次 | 内容 | 产出 |
+**Trade-offs 分析**：
+| 维度 | 选择 | 原因 |
 |------|------|------|
-| 第 1 周 | 过期机制 | EXPIRE, TTL, 后台清理 |
-| 第 2 周 | RDB 持久化 | SAVE, BGSAVE, 加载恢复 |
-| 第 3 周 | AOF 持久化 | AOF 记录、重放、重写 |
-| 第 4-5 周 | 主从复制 | REPLICAOF, PSYNC |
-| 第 6 周 | 事务 | MULTI, EXEC, WATCH |
-| 第 7 周 | 发布订阅 | PUBLISH, SUBSCRIBE |
-| 第 8 周 | 监控运维 | INFO, MONITOR, Metrics |
+| **性能 vs 可靠性** | 可靠性优先 | 允许短暂性能下降 |
+| **空间 vs 时间** | 时间优先（紧凑格式） | 节省磁盘空间 |
+| **一致性 vs 可用性** | 可用性优先（后台保存） | 不阻塞服务 |
 
-**完成后**：
-- 掌握分布式系统核心设计
-- 理解数据一致性和可靠性
-- 拥有完整的生产级思维
-- 可以写出高质量的系统设计文档
+**可迁移应用**：
+- 数据库备份（PostgreSQL pg_dump）
+- 容器镜像（Docker commit）
+- 游戏存档（定期快照）
 
 ---
 
-## 📚 配套学习资源
+#### Phase 1.2: AOF 日志架构（1-2 周）
 
-### 书籍（必读）
-1. **《Designing Data-Intensive Applications》** - Martin Kleppmann
-   - 第 3 章：存储与检索
-   - 第 5 章：复制
-   - 第 7 章：事务
+**架构模式**：**Write-Ahead Logging**（预写日志）
 
-2. **《Redis 设计与实现》** - 黄健宏
-   - 第 9-11 章：持久化
-   - 第 15-16 章：复制和哨兵
+##### 问题与方案
 
-### 论文（选读）
-- Raft 共识算法（简化版哨兵可以参考）
-- The Log-Structured Merge-Tree (LSM-Tree)
+**问题**：RDB丢失数据太多（最后一次快照后的数据），如何改进？
 
-### 源码（参考）
-- [Redis 官方源码](https://github.com/redis/redis)
-  - `rdb.c` - RDB 实现
-  - `aof.c` - AOF 实现
-  - `replication.c` - 复制实现
+**对比**：
+| 持久化方式 | RPO（丢失数据） | RTO（恢复时间） | 性能影响 |
+|-----------|---------------|---------------|---------|
+| **RDB** | 分钟级 | 快（秒级） | 小 |
+| **AOF** | 秒级或0 | 慢（需重放） | 中-大 |
+
+##### 核心架构图
+
+```
+写入流程（WAL）：
+┌────────────────────────────────────────┐
+│  Write Operation                       │
+│                                        │
+│  1. 写入 AOF 文件 ───┐                  │
+│     appendonly.aof   │                 │
+│     ↓                │                 │
+│  2. fsync()  ←───────┘                 │
+│     (根据策略决定)                       │
+│     ↓                                  │
+│  3. 修改内存数据                        │
+│     ↓                                  │
+│  4. 返回客户端                          │
+└────────────────────────────────────────┘
+
+AOF 文件内容（RESP 格式）：
+*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n
+*2\r\n$3\r\nDEL\r\n$3\r\nkey\r\n
+
+恢复流程：
+启动 → 读取 AOF → 逐条执行命令 → 恢复完成
+```
+
+##### 关键设计决策
+
+**决策 1：fsync 策略** （最重要！）
+
+```go
+type SyncPolicy string
+
+const (
+    AlwaysSync  SyncPolicy = "always"   // 每次写入立即 fsync
+    EverySecond SyncPolicy = "everysec" // 每秒 fsync 一次
+    NoSync      SyncPolicy = "no"       // 由操作系统决定
+)
+```
+
+| 策略 | 丢失风险 | 性能 | QPS | 适用场景 |
+|------|---------|------|-----|---------|
+| `always` | 0-1条命令 | 极慢 | ~200 | 金融系统 |
+| `everysec` | 最多1秒 | 中等 | ~50K | **推荐** |
+| `no` | 数十秒 | 极快 | ~100K | 不重要数据 |
+
+**决策 2：AOF Rewrite（重写机制）**
+
+```
+问题：AOF 文件无限增长
+  SET counter 1
+  INCR counter  # 100万次
+  结果：AOF 有 100万+1 条命令
+
+解决：定期重写
+  压缩为：SET counter 1000000
+
+触发条件：
+  - 文件大小 > 64MB
+  - 文件大小 > 上次重写的2倍
+```
+
+##### 实现范围
+
+**必须实现**：
+```go
+// 1. AOF 管理器
+type AOF struct {
+    file       *os.File
+    buffer     *bufio.Writer
+    syncPolicy SyncPolicy
+}
+
+// 2. 核心接口
+func (a *AOF) Append(cmd *protocol.Value) error  // 追加命令
+func (a *AOF) Sync() error                       // 执行 fsync
+func (a *AOF) Replay(router *Router) error       // 重放日志
+func (a *AOF) Rewrite(store *Store) error        // AOF 重写
+
+// 3. 命令
+BGREWRITEAOF  // 后台重写 AOF
+```
+
+**实现要点**：
+```go
+// 写入时：
+1. 将命令序列化为 RESP 格式
+2. 写入 buffer
+3. 根据 syncPolicy 决定是否立即 fsync
+
+// 重写时：
+1. 遍历当前内存数据
+2. 为每个 key 生成 SET 命令
+3. 写入新 AOF 文件
+4. 原子替换旧文件
+```
+
+**不必实现**：
+- ❌ RDB + AOF 混合持久化
+- ❌ AOF 并发重写优化
+
+**验证方法**：
+```bash
+# 1. 功能测试
+SET key1 value1
+# 重启服务
+GET key1  # 应该返回 value1
+
+# 2. fsync 策略测试
+# 设置 always/everysec/no，对比性能差异
+
+# 3. 重写测试
+SET counter 0
+INCR counter  # 1000次
+BGREWRITEAOF
+# 查看 AOF 文件大小变化
+```
+
+##### 学习重点
+
+**架构模式**：
+- ✅ **WAL**：MySQL binlog、PostgreSQL WAL、Kafka log
+- ✅ **Log Compaction**：Kafka、LSM-Tree 都用此思想
+- ✅ **Durability 保证**：理解 fsync 对性能的影响
+
+**Trade-offs**：
+```
+可靠性 vs 性能：
+  AOF always  → 几乎不丢数据，但慢
+  AOF everysec → 最多丢1秒，性能尚可  ← Redis默认
+  RDB         → 可能丢分钟级数据，但快
+
+空间 vs 复杂度：
+  不重写 → 简单，但文件巨大
+  重写   → 复杂，但节省空间
+```
 
 ---
 
-**总结：用 20% 的命令实现，学习 80% 的系统设计核心知识！** 🚀
+#### 阶段总结：Stage 1
+
+**学到的架构模式**：
+1. ✅ **Snapshot Pattern**（RDB）
+2. ✅ **Write-Ahead Logging**（AOF）
+3. ✅ **Log Compaction**（AOF Rewrite）
+
+**学到的设计原则**：
+1. ✅ **Durability vs Performance** - 没有完美方案，只有最适合的
+2. ✅ **分层设计** - 持久化层独立，不影响上层逻辑
+3. ✅ **可配置性** - 让用户根据场景选择策略
+
+**可迁移的知识**：
+- 数据库持久化（PostgreSQL、MySQL）
+- 消息队列（Kafka、RabbitMQ）
+- 文件系统（Journaling FS）
+- 版本控制系统（Git）
+
+**下一阶段预告**：
+- 问题：单点故障，无高可用
+- 方案：主从复制 + 故障转移
+
+---
+
+## 📚 学习资源
+
+### 必读
+
+**书籍**：
+- 《Designing Data-Intensive Applications》- Martin Kleppmann
+  - 第3章：Storage and Retrieval（RDB、AOF原理）
+  - 第5章：Replication（主从复制）
+
+**Redis 官方文档**：
+- [Redis Persistence](https://redis.io/docs/management/persistence/)
+- [Replication](https://redis.io/docs/management/replication/)
+
+### 源码阅读（选读）
+
+**Redis 源码**（C语言，但逻辑清晰）：
+- `rdb.c` - RDB 实现（2000行）
+- `aof.c` - AOF 实现（1500行）
+- `replication.c` - 复制协议（3000行）
+
+**阅读方法**：
+1. 不要逐行读，先看主流程
+2. 关注核心数据结构
+3. 理解设计决策（注释会说明）
+
+---
+
+## 🎯 下一步建议
+
+### 推荐学习路径
+
+```
+当前 (Stage 0: 单机架构)
+  ↓
+Stage 1.1: RDB 快照架构 (1-2周)
+  ↓
+Stage 1.2: AOF 日志架构 (1-2周)
+  ↓
+对比分析：RDB vs AOF (写设计文档)
+  ↓
+Stage 2: 主从复制架构 (2-3周)
+  ↓
+Stage 3: 并发控制 (事务、Pub/Sub) (2周)
+  ↓
+总结：架构设计思维提炼
+```
+
+### 学习建议
+
+**不要**：
+- ❌ 追求功能完整性（不要实现所有命令）
+- ❌ 过早优化（先实现基本功能，再优化）
+- ❌ 孤立学习（每个阶段都要思考可迁移性）
+
+**应该**：
+- ✅ 先画架构图，再写代码
+- ✅ 每个阶段写设计文档（记录 Trade-offs）
+- ✅ 性能测试（验证设计假设）
+- ✅ 对比其他系统（如何应用到 Kafka、PostgreSQL）
+
+### 每个阶段的产出
+
+**代码**：
+- 核心功能实现
+- 单元测试 + 集成测试
+- 性能基准测试
+
+**文档**：
+- 架构设计文档（问题、方案、Trade-offs）
+- 性能测试报告
+- 学习笔记（可迁移的知识点）
+
+---
+
+## 💡 架构设计思维框架
+
+### 每次设计时问自己
+
+**1. 问题定义**
+- 当前架构的局限是什么？
+- 要解决什么具体问题？
+- 非功能性需求是什么（性能、可靠性、一致性）？
+
+**2. 方案对比**
+- 有哪些可选方案？
+- 每个方案的 Trade-offs 是什么？
+- 为什么选择这个方案？
+
+**3. 设计决策**
+- 关键设计点有哪些？
+- 每个决策的理由是什么？
+- 如何验证设计是正确的？
+
+**4. 学习反思**
+- 学到了什么架构模式？
+- 如何应用到其他系统？
+- 如果重新设计，会怎么改进？
+
+---
+
+## 📊 进度跟踪
+
+| 阶段 | 状态 | 学到的架构模式 | 耗时 |
+|------|------|---------------|------|
+| Stage 0: 单机架构 | ✅ 已完成 | 分层架构、命令模式 | - |
+| Stage 1.1: RDB | ⬜ 待开始 | Snapshot Pattern | - |
+| Stage 1.2: AOF | ⬜ 待开始 | WAL, Log Compaction | - |
+| Stage 2: 主从复制 | ⬜ 待规划 | Replication | - |
+
+---
+
+**记住**：
+> **目标不是实现 Redis，而是通过 Redis 学习系统架构设计**
+>
+> 衡量学习成果的标准：
+> - 能独立设计一个分布式系统吗？
+> - 能分析和权衡不同架构方案吗？
+> - 能将学到的模式应用到其他系统吗？
